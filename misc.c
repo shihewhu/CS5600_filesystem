@@ -246,7 +246,7 @@ int do_put(char *argv[])
 
     sprintf(path, "%s/%s", cwd, inside);
     fix_path(path);
-    if ((val = fs_ops.create(path, 0777, 0)) != 0)
+    if ((val = fs_ops.mknod(path, 0777 | S_IFREG, 0)) != 0)
 	return val;
     
     while ((len = read(fd, blkbuf, blksiz)) > 0) {
