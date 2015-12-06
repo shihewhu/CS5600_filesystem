@@ -1,0 +1,1 @@
+Dec 6, 0:07 2015, almost finished Question 1, come across a Segmentation fault;

@@ -145,6 +145,7 @@ void print_ls(void)
 int do_ls0(char *argv[])
 {
     init_ls();
+    printf("do_ls0\n");
     int retval = fs_ops.readdir(get_cwd(), NULL, filler, 0, NULL);
     print_ls();
     return retval;

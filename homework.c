@@ -22,7 +22,6 @@
 #include "fs5600.h"
 #include "blkdev.h"
 
-
 /* 
  * disk access - the global variable 'disk' points to a blkdev
  * structure which has been initialized to access the image file.
@@ -39,7 +38,7 @@ extern struct blkdev *disk;
  */
 fd_set *inode_map;              /* = malloc(sb.inode_map_size * FS_BLOCK_SIZE); */
 fd_set *block_map;
-
+struct fs5600_inode *inode_region;	/* inodes in memory */
 
 /* init - this is called once by the FUSE framework at startup. Ignore
  * the 'conn' argument.
@@ -50,10 +49,22 @@ fd_set *block_map;
 void* fs_init(struct fuse_conn_info *conn)
 {
     struct fs5600_super sb;
+    /* here 1 stands for block size, here is 1024 bytes */
     disk->ops->read(disk, 0, 1, &sb);
 
     /* your code here */
+    /* read bitmaps */
+    inode_map = malloc(sb.inode_map_sz * FS_BLOCK_SIZE);
+    disk->ops->read(disk, 1, sb.inode_map_sz, inode_map);
     
+    block_map = malloc(sb.block_map_sz * FS_BLOCK_SIZE);
+    disk->ops->read(disk, sb.inode_map_sz + 1, sb.block_map_sz, block_map);
+
+    /* read inodes */
+    inode_region = malloc(sb.inode_region_sz * FS_BLOCK_SIZE);
+    int inode_region_pos = 1 + sb.inode_map_sz + sb.block_map_sz;
+    disk->ops->read(disk, inode_region_pos, sb.inode_region_sz, inode_region);
+
     return NULL;
 }
 
@@ -78,6 +89,103 @@ void* fs_init(struct fuse_conn_info *conn)
  *    int inum = translate(_path);
  *    free(_path);
  */
+/* TODO: duplicated name dir and file */
+/* translate: return the inode number of given path */
+/* static int translate(const char *path) { */
+/*     /\* split the path *\/ */
+/*     char *_path = strdup(path); */
+/*     const char delim[] = "/"; */
+
+/*     /\* traverse to path *\/ */
+    
+/*     /\* root inode *\/ */
+/*     int inode_num = 1; */
+/*     struct fs5600_inode *inode; */
+/*     struct fs5600_dirent *dir; */
+/*     dir = malloc(FS_BLOCK_SIZE); */
+    
+/*     struct fs5600_dirent dummy_dir = { */
+/* 	.valid = 1, */
+/* 	.isDir = 1, */
+/* 	.inode = inode_num, */
+/* 	.name = "/", */
+/*     }; */
+/*     struct fs5600_dirent *current_dir = &dummy_dir; */
+
+/*     char *token; */
+/*     token = strtok(_path, delim); */
+    
+/*     while (token != NULL) { */
+/* 	if (current_dir->valid == 0) { */
+/* 	    return ENOENT; */
+/* 	} */
+/* 	if (current_dir->isDir == 0) { */
+/* 	    token = strtok(NULL, delim); */
+/* 	    if (token == NULL) { */
+/* 		break; */
+/* 	    } else { */
+/* 		return ENOTDIR; */
+/* 	    } */
+/* 	} */
+/* 	assert(current_dir->isDir); */
+/* 	inode = &inode_region[inode_num]; */
+/* 	int block_pos = inode->direct[0]; */
+/* 	disk->ops->read(disk, block_pos, 1, dir); */
+/* 	int i; */
+/* 	int found = 0; */
+/* 	for (i = 0; i < 32; i++) { */
+/* 	    if (strcmp(dir[i].name, token) == 0) { */
+/* 		found = 1; */
+/* 		inode_num = dir[i].inode; */
+/* 		current_dir = &dir[i]; */
+/* 	    } */
+/* 	} */
+/* 	if (found == 0) { */
+/* 	    printf("ENOENT"); */
+/* 	    return ENOENT; */
+/* 	} */
+/*     	token = strtok(NULL, delim); */
+	
+/*     } */
+    
+/*     /\* traverse all the subsides *\/ */
+/*     /\* if found, return corresponding inode *\/ */
+/*     /\* else, return error *\/ */
+/*     free(dir); */
+/*     free(_path); */
+/*     return inode_num; */
+/* } */
+
+/* trancate the last token from path */
+int trancate_path (const char *path, char *trancated_path) {
+    printf("%s\n", path);
+    int i = strlen(path) - 1;
+    i++;
+    printf("%d", i);
+    /* if (path[i] == '/') { */
+    /* 	i--; */
+    /* } */
+    /* for (; i >= 0; i--) { */
+    /* 	if (path[i] == '/') { */
+    /* 	    strncpy(trancated_path, path, ++i); */
+    /* 	    return 0; */
+    /* 	} */
+    /* } */
+    return 1;
+}
+
+/* static void set_attr(struct fs5600_inode *inode, struct stat *sb) { */
+/*     /\* set every other bit to zero *\/ */
+/*     memset(sb, 0, sizeof(*sb)); */
+/*     sb->st_mode = inode->mode; */
+/*     sb->st_uid = inode->uid; */
+/*     sb->st_size = 0; */
+/*     sb->st_blocks = inode->size / 512; */
+/*     sb->st_nlink = 1; */
+/*     sb->st_atime = inode->ctime; */
+/*     sb->st_ctime = inode->ctime; */
+/*     sb->st_mtime = inode->ctime; */
+/* } */
 
 /* getattr - get file or directory attributes. For a description of
  *  the fields in 'struct stat', see 'man lstat'.
@@ -90,9 +198,39 @@ void* fs_init(struct fuse_conn_info *conn)
  */
 static int fs_getattr(const char *path, struct stat *sb)
 {
-    return -EOPNOTSUPP;
+    printf("lsing");
+    /* int inum = translate(path); */
+    /* if (inum == ENOENT) { */
+    /* 	return ENOENT; */
+    /* } */
+
+    /* struct fs5600_inode *inode = &inode_region[inum]; */
+    /* set_attr(inode, sb); */
+    /* /\* what should I return if succeeded? */
+    /*  success (0) *\/ */
+    return 0;
 }
 
+/* check whether this inode is a directory */
+/* int inode_is_dir(int father_inum, int inum) { */
+/*     struct fs5600_inode *inode; */
+/*     struct fs5600_dirent *dir; */
+/*     dir = malloc(FS_BLOCK_SIZE); */
+    
+/*     inode = &inode_region[father_inum]; */
+/*     int block_pos = inode->direct[0]; */
+/*     disk->ops->read(disk, block_pos, 1, dir); */
+/*     int i; */
+/*     for (i = 0; i < 32; i++) { */
+/* 	if (dir[i].valid == 0) { */
+/* 	    continue; */
+/* 	} */
+/* 	if (dir[i].inode == inum) { */
+/* 	    return dir[i].isDir; */
+/* 	} */
+/*     } */
+/*     return 0; */
+/* } */
 /* readdir - get directory contents.
  *
  * for each entry in the directory, invoke the 'filler' function,
@@ -105,7 +243,50 @@ static int fs_getattr(const char *path, struct stat *sb)
 static int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
 		       off_t offset, struct fuse_file_info *fi)
 {
-    return -EOPNOTSUPP;
+    printf("reading\n");
+    char *trancated_path = NULL;
+    trancate_path(path, trancated_path);
+    /* printf("%s\n",trancated_path) */;
+    /* int father_inum = translate(trancated_path); */
+
+    /* int inum = translate(path); */
+    /* if (inum == ENOTDIR || inum == ENOENT) { */
+    /* 	return inum; */
+    /* } */
+    
+    /* if (!inode_is_dir(father_inum, inum)) { */
+    /* 	return ENOTDIR; */
+    /* } */
+    /* struct fs5600_inode *inode; */
+    /* struct fs5600_dirent *dir; */
+    /* dir = malloc(FS_BLOCK_SIZE); */
+    
+    /* inode = &inode_region[inum]; */
+    /* int block_pos = inode->direct[0]; */
+    /* disk->ops->read(disk, block_pos, 1, dir); */
+
+    /* int curr_inum; */
+    /* struct fs5600_inode *curr_inode; */
+    /* char *name; */
+    /* struct stat *sb = malloc(sizeof(struct stat)); */
+    /* int i; */
+    /* printf("haha"); */
+    /* for (i = 0; i < 32; i++) { */
+    /* 	if (dir[i].valid == 0) { */
+    /* 	    continue; */
+    /* 	} */
+    /* 	curr_inum = dir[i].inode; */
+    /* 	curr_inode = &inode_region[curr_inum]; */
+
+    /* 	name = dir[i].name; */
+    /* 	printf("%s\n",name); */
+    /* 	set_attr(curr_inode, sb); */
+    /* 	filler(NULL, name, sb, 0); */
+    /* } */
+
+    /* free(sb); */
+    /* free(dir); */
+    return 0;
 }
 
 /* mknod - create a new file with specified permissions
