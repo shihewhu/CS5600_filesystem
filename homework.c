@@ -93,17 +93,15 @@ void* fs_init(struct fuse_conn_info *conn)
 /* translate: return the inode number of given path */
 static int translate(const char *path) {
     /* split the path */
-    char *_path = strdup(path);
-    const char delim[] = "/";
-
+    char *_path;
+    _path = strdup(path);
     /* traverse to path */
-    
     /* root inode */
     int inode_num = 1;
     struct fs5600_inode *inode;
     struct fs5600_dirent *dir;
     dir = malloc(FS_BLOCK_SIZE);
-    
+
     struct fs5600_dirent dummy_dir = {
 	.valid = 1,
 	.isDir = 1,
@@ -113,41 +111,41 @@ static int translate(const char *path) {
     struct fs5600_dirent *current_dir = &dummy_dir;
 
     char *token;
+    char *delim = "/";
     token = strtok(_path, delim);
-    
     while (token != NULL) {
-	if (current_dir->valid == 0) {
-	    return ENOENT;
-	}
-	if (current_dir->isDir == 0) {
-	    token = strtok(NULL, delim);
-	    if (token == NULL) {
-		break;
-	    } else {
-		return ENOTDIR;
+        if (current_dir->valid == 0) {
+	        return ENOENT;
 	    }
-	}
-	assert(current_dir->isDir);
-	inode = &inode_region[inode_num];
-	int block_pos = inode->direct[0];
-	disk->ops->read(disk, block_pos, 1, dir);
-	int i;
-	int found = 0;
-	for (i = 0; i < 32; i++) {
-	    if (strcmp(dir[i].name, token) == 0) {
-		found = 1;
-		inode_num = dir[i].inode;
-		current_dir = &dir[i];
+	    if (current_dir->isDir == 0) {
+	        token = strtok(NULL, delim);
+	        if (token == NULL) {
+		    break;
+            } else {
+		        return ENOTDIR;
+	        }
 	    }
-	}
-	if (found == 0) {
-	    printf("ENOENT");
-	    return ENOENT;
-	}
-    	token = strtok(NULL, delim);
-	
+	    assert(current_dir->isDir);
+	    inode = &inode_region[inode_num];
+	    int block_pos = inode->direct[0];
+	    disk->ops->read(disk, block_pos, 1, dir);
+	    int i;
+	    int found = 0;
+	    for (i = 0; i < 32; i++) {
+            if (strcmp(dir[i].name, token) == 0) {
+                found = 1;
+                inode_num = dir[i].inode;
+                current_dir = &dir[i];
+            }
+	    }
+	    if (found == 0) {
+	        printf("ENOENT");
+	            return ENOENT;
+	    }
+        token = strtok(NULL, delim);
+
     }
-    
+
     /* traverse all the subsides */
     /* if found, return corresponding inode */
     /* else, return error */
@@ -157,18 +155,17 @@ static int translate(const char *path) {
 }
 
 /* trancate the last token from path */
-int trancate_path (const char *path, char *trancated_path) {
-    printf("%s\n", path);
+int trancate_path (const char *path, char **trancated_path) {
     int i = strlen(path) - 1;
-    i++;
-    printf("%d", i);
     if (path[i] == '/') {
     	i--;
     }
     for (; i >= 0; i--) {
     	if (path[i] == '/') {
-    	    strncpy(trancated_path, path, ++i);
-    	    return 0;
+            *trancated_path = (char*)malloc(sizeof(char) * (i + 2));
+            memcpy(*trancated_path, path, i + 1);
+            (*trancated_path)[i + 1] = '\0';
+            return 0;
     	}
     }
     return 1;
@@ -198,7 +195,6 @@ static void set_attr(struct fs5600_inode *inode, struct stat *sb) {
  */
 static int fs_getattr(const char *path, struct stat *sb)
 {
-    printf("lsing");
     int inum = translate(path);
     if (inum == ENOENT) {
     	return ENOENT;
@@ -243,18 +239,19 @@ int inode_is_dir(int father_inum, int inum) {
 static int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
 		       off_t offset, struct fuse_file_info *fi)
 {
-    printf("reading\n");
-    char *trancated_path = NULL;
-    trancate_path(path, trancated_path);
-    printf("%s\n",trancated_path)
-    int father_inum = translate(trancated_path);
-
+    printf("path is : %s\n", path);
+    char *trancated_path;
+    int father_inum = 0;
+    if (!trancate_path(path, &trancated_path)) {
+        father_inum = translate(trancated_path);
+    }
+    printf("%s\n", trancated_path);
     int inum = translate(path);
     if (inum == ENOTDIR || inum == ENOENT) {
     	return inum;
     }
     
-    if (!inode_is_dir(father_inum, inum)) {
+    if (father_inum != 0 && !inode_is_dir(father_inum, inum)) {
     	return ENOTDIR;
     }
     struct fs5600_inode *inode;
@@ -270,7 +267,6 @@ static int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
     char *name;
     struct stat *sb = malloc(sizeof(struct stat));
     int i;
-    printf("haha");
     for (i = 0; i < 32; i++) {
     	if (dir[i].valid == 0) {
     	    continue;
@@ -279,7 +275,6 @@ static int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
     	curr_inode = &inode_region[curr_inum];
 
     	name = dir[i].name;
-    	printf("%s\n",name);
     	set_attr(curr_inode, sb);
     	filler(NULL, name, sb, 0);
     }
