@@ -277,8 +277,11 @@ int do_get(char *argv[])
     sprintf(path, "%s/%s", cwd, inside);
     fix_path(path);
     while ((len = fs_ops.read(path, blkbuf, blksiz, offset, NULL)) > 0) {
-	if ((val = write(fd, blkbuf, len)) != len)
-	    break;
+	if ((val = write(fd, blkbuf, len)) != len) {
+        printf("the len is: %d\n", len);
+        printf("breaking\n");
+        break;
+    }
 	offset += len;
     }
     close(fd);
