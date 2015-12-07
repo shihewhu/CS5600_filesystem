@@ -157,8 +157,10 @@ static int translate(const char *path) {
 /* trancate the last token from path */
 int trancate_path (const char *path, char **trancated_path) {
     int i = strlen(path) - 1;
-    if (path[i] == '/') {
-    	i--;
+    for (; i >= 0; i--) {
+        if (path[i] != '/') {
+            break;
+        }
     }
     for (; i >= 0; i--) {
     	if (path[i] == '/') {
@@ -176,8 +178,8 @@ static void set_attr(struct fs5600_inode *inode, struct stat *sb) {
     memset(sb, 0, sizeof(*sb));
     sb->st_mode = inode->mode;
     sb->st_uid = inode->uid;
-    sb->st_size = 0;
-    sb->st_blocks = inode->size / 512;
+    sb->st_size = inode->size;
+    sb->st_blocks = 1 + ((inode->size - 1) / FS_BLOCK_SIZE);
     sb->st_nlink = 1;
     sb->st_atime = inode->ctime;
     sb->st_ctime = inode->ctime;
@@ -212,7 +214,7 @@ int inode_is_dir(int father_inum, int inum) {
     struct fs5600_inode *inode;
     struct fs5600_dirent *dir;
     dir = malloc(FS_BLOCK_SIZE);
-    
+
     inode = &inode_region[father_inum];
     int block_pos = inode->direct[0];
     disk->ops->read(disk, block_pos, 1, dir);
@@ -239,13 +241,12 @@ int inode_is_dir(int father_inum, int inum) {
 static int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
 		       off_t offset, struct fuse_file_info *fi)
 {
-    printf("path is : %s\n", path);
+//    printf("path is : %s\n", path);
     char *trancated_path;
     int father_inum = 0;
     if (!trancate_path(path, &trancated_path)) {
         father_inum = translate(trancated_path);
     }
-    printf("%s\n", trancated_path);
     int inum = translate(path);
     if (inum == ENOTDIR || inum == ENOENT) {
     	return inum;
@@ -395,6 +396,7 @@ int fs_utime(const char *path, struct utimbuf *ut)
 static int fs_read(const char *path, char *buf, size_t len, off_t offset,
 		    struct fuse_file_info *fi)
 {
+
     return -EOPNOTSUPP;
 }
 
