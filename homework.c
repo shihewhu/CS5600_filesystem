@@ -94,8 +94,6 @@ void* fs_init(struct fuse_conn_info *conn)
 static int translate(const char *path) {
     /* split the path */
     char *_path;
-    printf("before strdup\n");
-    sleep(0.1);
     _path = strdup(path);
     /* traverse to path */
     /* root inode */
@@ -151,12 +149,8 @@ static int translate(const char *path) {
     /* traverse all the subsides */
     /* if found, return corresponding inode */
     /* else, return error */
-    printf("translation before free dir\n");
-    sleep(10);
     free(dir);
-    printf("translation before free _path\n");
     free(_path);
-    printf("translation after free _path\n");
     return inode_num;
 }
 
@@ -247,7 +241,6 @@ int inode_is_dir(int father_inum, int inum) {
 static int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
 		       off_t offset, struct fuse_file_info *fi)
 {
-//    printf("path is : %s\n", path);
     char *trancated_path;
     int father_inum = 0;
     if (!trancate_path(path, &trancated_path)) {
@@ -278,6 +271,8 @@ static int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
     struct stat *sb = malloc(sizeof(struct stat));
     int i;
     for (i = 0; i < 32; i++) {
+//        printf("name is : %s\n", dir[i].name);
+//        printf("valid is : %d\n", dir[i].valid);
     	if (dir[i].valid == 0) {
     	    continue;
     	}
@@ -395,7 +390,15 @@ int fs_utime(const char *path, struct utimbuf *ut)
     return -EOPNOTSUPP;
 }
 
+//static int fs_read_3rd_level(int inum, int offset, int len, char *buf);
+//static int fs_read_2nd_level(int inum, int offset, int len, char *buf);
+// given block number, offset, length and return buffer, load corresponding data into buffer
 static int fs_read_block(int blknum, int offset, int len, char *buf);
+//static int fs_read_file_by_inode();
+
+// return the read in length
+static int fs_read_1st_level(char *buf, off_t offset, size_t len, const struct fs5600_inode *inode);
+
 /* read - read data from an open file.
  * should return exactly the number of bytes requested, except:
  *   - if offset >= file len, return 0
@@ -406,14 +409,13 @@ static int fs_read_block(int blknum, int offset, int len, char *buf);
 static int fs_read(const char *path, char *buf, size_t len, off_t offset,
                    struct fuse_file_info *fi)
 {
-    printf("offset: %d\nlen: %d\n", (int)offset, (int)len);
-    printf("-------\n");
-    printf("path in fs_read is: %s\n", path);
+    // first get the inode
+    // check it is valid
+    // check it is file
+
     int inum = translate(path);
-    printf("inum = %d", inum);
-    struct fs5600_inode *inode = &inode_region[inum];
+    const struct fs5600_inode *inode = &inode_region[inum];
     // assert path is a file
-    printf("before assert");
     assert(S_ISREG(inode->mode));
     int size = inode->size;
     if (offset >= size) {
@@ -422,16 +424,30 @@ static int fs_read(const char *path, char *buf, size_t len, off_t offset,
     if (offset + len > size) {
         len = size - offset;
     }
-    if (len <= 6 * BLOCK_SIZE) {
-        printf("length < 6 block size\n");
-        int i = offset / BLOCK_SIZE;
-        offset = offset % BLOCK_SIZE;
-        int temp_len = len;
-        printf("temp length: %d\n", temp_len);
-        int in_blk_len;
+    if (offset <= 6 * BLOCK_SIZE) {
+        offset += fs_read_1st_level(buf, offset, len, inode);
+    }
+    if (offset > 6 * BLOCK_SIZE && offset <= BLOCK_SIZE / 4 * BLOCK_SIZE) {
 
-        for (; i < 6 && temp_len > 0; offset = 0, i++) {
-            printf("loop %d\n", i);
+        printf("TODO\n");
+        return -EOPNOTSUPP;
+    } else
+    if (offset > BLOCK_SIZE / 4 * BLOCK_SIZE && offset <= (BLOCK_SIZE / 4) * (BLOCK_SIZE / 4) * BLOCK_SIZE) {
+        printf("TODO\n");
+        return -EOPNOTSUPP;
+    }
+
+    return len;
+}
+
+static int fs_read_1st_level(char *buf, off_t offset, size_t len, const struct fs5600_inode *inode) {
+    int read_length = 0;
+    int block_direct = offset / BLOCK_SIZE;
+    int temp_len = len;
+    int in_blk_len;
+    int temp_offset = offset % BLOCK_SIZE;
+
+    for (; block_direct < 6 && temp_len > 0; temp_offset = 0, block_direct++) {
             if (temp_len > BLOCK_SIZE) {
                 in_blk_len = BLOCK_SIZE;
                 temp_len -= BLOCK_SIZE;
@@ -439,34 +455,20 @@ static int fs_read(const char *path, char *buf, size_t len, off_t offset,
                 in_blk_len = temp_len;
                 temp_len = 0;
             }
-            printf("before reading block\n");
-            fs_read_block(inode->direct[i], offset, in_blk_len, buf);
-            printf("after reading block\n");
+            fs_read_block(inode->direct[block_direct], temp_offset, in_blk_len, buf);
             buf += in_blk_len;
+            read_length += in_blk_len;
         }
-    } else if (len <= BLOCK_SIZE / 4 * BLOCK_SIZE) {
-        printf("TODO\n");
-        return -EOPNOTSUPP;
-    } else if (len <= (BLOCK_SIZE / 4) * (BLOCK_SIZE / 4) * BLOCK_SIZE) {
-        printf("TODO\n");
-        return -EOPNOTSUPP;
-    }
-
-    printf("returned len is: %d\n", len);
-    return len;
-    return -EOPNOTSUPP;
+    return read_length;
 }
 
 static int fs_read_block(int blknum, int offset, int len, char *buf) {
-    char *blk = (char*) malloc((char) BLOCK_SIZE);
+    char *blk = (char*) malloc(BLOCK_SIZE);
     disk->ops->read(disk, blknum, 1, blk);
-    printf("block is \n %s\n", blk);
     char *blk_ptr = blk;
     blk_ptr += offset;
-    printf("before memcpy\n");
     memcpy(buf, blk_ptr, len);
-    printf("after memcpy\n");
-    //free(blk);
+    free(blk);
     return 0;
 }
 
