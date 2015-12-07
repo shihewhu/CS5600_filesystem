@@ -47,7 +47,7 @@ case $filename in
 		fi
 		;;
 	"/dir1/file.2" )
-		if [[ "$cksum" ==  "3106598394 2012 file.2" ]]; then
+		if [[ "$cksum" ==  "3106598394 2012 /tmp/file.2" ]]; then
 			echo "get /dir1/file.2 succeeds"
 		else
 			echo "get /dir1/file.2 fails"
