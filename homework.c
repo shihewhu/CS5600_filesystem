@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <assert.h>
+#include <time.h>
 
 #include "fs5600.h"
 #include "blkdev.h"
@@ -38,6 +39,8 @@ extern struct blkdev *disk;
  */
 fd_set *inode_map;              /* = malloc(sb.inode_map_size * FS_BLOCK_SIZE); */
 fd_set *block_map;
+int inode_map_sz;
+int block_map_sz;
 struct fs5600_inode *inode_region;	/* inodes in memory */
 
 /* init - this is called once by the FUSE framework at startup. Ignore
@@ -56,9 +59,13 @@ void* fs_init(struct fuse_conn_info *conn)
     /* read bitmaps */
     inode_map = malloc(sb.inode_map_sz * FS_BLOCK_SIZE);
     disk->ops->read(disk, 1, sb.inode_map_sz, inode_map);
+    inode_map_sz = sb.inode_map_sz;
+    printf("inode map size is: %d\n", sb.inode_map_sz);
     
     block_map = malloc(sb.block_map_sz * FS_BLOCK_SIZE);
     disk->ops->read(disk, sb.inode_map_sz + 1, sb.block_map_sz, block_map);
+    block_map_sz = sb.block_map_sz;
+    printf("block map size is: %d\n", sb.block_map_sz);
 
     /* read inodes */
     inode_region = malloc(sb.inode_region_sz * FS_BLOCK_SIZE);
@@ -89,7 +96,6 @@ void* fs_init(struct fuse_conn_info *conn)
  *    int inum = translate(_path);
  *    free(_path);
  */
-/* TODO: duplicated name dir and file */
 /* translate: return the inode number of given path */
 static int translate(const char *path) {
     /* split the path */
@@ -115,14 +121,14 @@ static int translate(const char *path) {
     token = strtok(_path, delim);
     while (token != NULL) {
         if (current_dir->valid == 0) {
-	        return ENOENT;
+	        return -ENOENT;
 	    }
 	    if (current_dir->isDir == 0) {
 	        token = strtok(NULL, delim);
 	        if (token == NULL) {
 		    break;
             } else {
-		        return ENOTDIR;
+		        return -ENOTDIR;
 	        }
 	    }
 	    assert(current_dir->isDir);
@@ -139,8 +145,8 @@ static int translate(const char *path) {
             }
 	    }
 	    if (found == 0) {
-	        printf("ENOENT");
-	            return ENOENT;
+            printf("returning not found ENOENT: %d\n", -ENOENT);
+            return -ENOENT;
 	    }
         token = strtok(NULL, delim);
 
@@ -151,12 +157,16 @@ static int translate(const char *path) {
     /* else, return error */
     free(dir);
     free(_path);
+    printf("inum inside translation: %d\n", inode_num);
     return inode_num;
 }
 
-/* trancate the last token from path */
+/* trancate the last token from path
+ * return 1 if succeed, 0 if not*/
 int trancate_path (const char *path, char **trancated_path) {
     int i = strlen(path) - 1;
+    // strip the tailling '/'
+    // deal with '///' case
     for (; i >= 0; i--) {
         if (path[i] != '/') {
             break;
@@ -167,10 +177,10 @@ int trancate_path (const char *path, char **trancated_path) {
             *trancated_path = (char*)malloc(sizeof(char) * (i + 2));
             memcpy(*trancated_path, path, i + 1);
             (*trancated_path)[i + 1] = '\0';
-            return 0;
+            return 1;
     	}
     }
-    return 1;
+    return 0;
 }
 
 static void set_attr(struct fs5600_inode *inode, struct stat *sb) {
@@ -198,8 +208,8 @@ static void set_attr(struct fs5600_inode *inode, struct stat *sb) {
 static int fs_getattr(const char *path, struct stat *sb)
 {
     int inum = translate(path);
-    if (inum == ENOENT) {
-    	return ENOENT;
+    if (inum == -ENOENT) {
+    	return -ENOENT;
     }
 
     struct fs5600_inode *inode = &inode_region[inum];
@@ -224,9 +234,12 @@ int inode_is_dir(int father_inum, int inum) {
 	    continue;
 	}
 	if (dir[i].inode == inum) {
-	    return dir[i].isDir;
+        int result = dir[i].inode;
+        free(dir);
+	    return result;
 	}
     }
+    free(dir);
     return 0;
 }
 /* readdir - get directory contents.
@@ -243,17 +256,18 @@ static int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
 {
     char *trancated_path;
     int father_inum = 0;
-    if (!trancate_path(path, &trancated_path)) {
+    // if succeeded in trancating path
+    if (trancate_path(path, &trancated_path)) {
         father_inum = translate(trancated_path);
     }
 
     int inum = translate(path);
-    if (inum == ENOTDIR || inum == ENOENT) {
+    if (inum == -ENOTDIR || inum == -ENOENT) {
     	return inum;
     }
 
     if (father_inum != 0 && !inode_is_dir(father_inum, inum)) {
-    	return ENOTDIR;
+    	return -ENOTDIR;
     }
     struct fs5600_inode *inode;
     struct fs5600_dirent *dir;
@@ -289,6 +303,10 @@ static int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
     return 0;
 }
 
+int dir_full(int dir_inum);
+
+int find_free_inode_map_bit();
+
 /* mknod - create a new file with specified permissions
  *
  * Errors - path resolution, EEXIST
@@ -302,7 +320,91 @@ static int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
  */
 static int fs_mknod(const char *path, mode_t mode, dev_t dev)
 {
-    return -EOPNOTSUPP;
+    printf("entering fs_mknod\n");
+    printf("path is %s\n", path);
+    // check permission, !S_ISREG(mode)
+
+    if (!S_ISREG(mode)) {
+        return -EINVAL;
+    }
+    // check father dir exist
+    char *father_path;
+    if (!trancate_path(path, &father_path)) {
+        // this means there is no nod to make, path is "/"
+        return -1;
+    }
+    printf("trancated path is : %s\n", father_path);
+    int dir_inum = translate(father_path);
+    printf("inode number is %d\n", dir_inum);
+    if (dir_inum == -ENOENT || dir_inum == -ENOTDIR) {
+        printf("a component is not present or intermediate component is not directory");
+        return -EEXIST;
+    }
+    // check if dest file exists
+    int inum = translate(path);
+    printf("inum : %d\n", inum);
+    if (inum > 0) {
+        return -EEXIST;
+    }
+    // check entries in father dir not excceed 32
+    printf("checking excceeds 32\n");
+    if(dir_full(dir_inum)) {
+        return -ENOSPC;
+    }
+
+    // here allocate inode region, i.e. set inode region bitmap
+    time_t time_raw_format;
+    time( &time_raw_format );
+    struct fs5600_inode new_inode = {
+            .uid = getuid(),
+            .gid = getgid(),
+            .mode = mode,
+            .ctime = time_raw_format,
+            .mtime = time_raw_format,
+            .size = 0,
+    };
+    int free_bit = find_free_inode_map_bit();
+    if (free_bit < 0) {
+        return -ENOSPC;
+    }
+    FD_SET(free_bit, inode_map);
+
+    // write inode to the allocated pos in inode region
+    int offset = 1  + inode_map_sz + block_map_sz + free_bit;
+    disk->ops->write(disk, offset  , 1, &new_inode);
+
+    printf("father path is: %s\n", father_path);
+    return 0;
+}
+
+int find_free_inode_map_bit() {// find a free inode_region
+    int inode_capacity = sizeof(inode_map) * sizeof(fd_set);
+    printf("capa is: %d\n", inode_capacity);
+    int i;
+    for (i = 0; i < inode_capacity; i++) {
+        if (!FD_ISSET(i, inode_map)) {
+            return i;
+        }
+    }
+    printf("inode map full.\n");
+    return -ENOSPC;
+}
+
+int dir_full(int dir_inum) {
+    struct fs5600_inode *inode = &inode_region[dir_inum];
+    struct fs5600_dirent *dir = (struct fs5600_dirent *)malloc(sizeof(struct fs5600_dirent));
+    disk->ops->read(disk, (inode->direct)[0], 1, dir);
+
+    int full = 1;
+    int i;
+    for (i = 0; i < 32; i++) {
+        if (!dir->valid) {
+            full = 0;
+            break;
+        }
+    }
+    free(dir);
+    return full;
 }
 
 /* mkdir - create a directory with the given mode.
@@ -427,17 +529,19 @@ static int fs_read(const char *path, char *buf, size_t len, off_t offset,
         len = size - offset;
     }
     int tmp_len = len;
+
+
     if (offset < 6 * BLOCK_SIZE) {
         int read_len = fs_read_1st_level(inode, offset, tmp_len, buf);
         offset += read_len;
         tmp_len -= read_len;
     }
-    if (offset >= 6 * BLOCK_SIZE && offset < BLOCK_SIZE / 4 * BLOCK_SIZE) {
+    if (offset >= 6 * BLOCK_SIZE && offset < BLOCK_SIZE / 4 * BLOCK_SIZE + 6 * BLOCK_SIZE) {
         int read_len = fs_read_2nd_level(inode->indir_1, offset, tmp_len, buf);
         offset += read_len;
         tmp_len -= read_len;
-    } else
-    if (offset >= BLOCK_SIZE / 4 * BLOCK_SIZE && offset <= (BLOCK_SIZE / 4) * (BLOCK_SIZE / 4) * BLOCK_SIZE) {
+    }
+    if (offset >= BLOCK_SIZE / 4 * BLOCK_SIZE + 6 * BLOCK_SIZE && offset <= (BLOCK_SIZE / 4) * (BLOCK_SIZE / 4) * BLOCK_SIZE) {
         fs_read_3rd_level(inode->indir_2, offset, tmp_len, buf);
     }
 
@@ -497,7 +601,6 @@ static int fs_read_2nd_level(size_t root_blk, int offset, int len, char *buf){
 
 static int fs_read_3rd_level(size_t root_blk, int offset, int len, char *buf){
     int read_length = 0;
-
     int h1t_block_num = BLOCK_SIZE / sizeof(int *);
     int h1t_block_size = (BLOCK_SIZE * h1t_block_num);
     int h2t_block_num = h1t_block_num * h1t_block_num;
@@ -520,7 +623,7 @@ static int fs_read_3rd_level(size_t root_blk, int offset, int len, char *buf){
             in_blk_len = temp_len;
             temp_len = 0;
         }
-        fs_read_2nd_level(h2t_blk[block_direct], in_blk_offset, in_blk_len, buf);
+        fs_read_2nd_level(h2t_blk[block_direct], in_blk_offset + 6 * BLOCK_SIZE, in_blk_len, buf);
         buf += in_blk_len;
         read_length += in_blk_len;
     }
@@ -529,6 +632,7 @@ static int fs_read_3rd_level(size_t root_blk, int offset, int len, char *buf){
 
 static int fs_read_block(int blknum, int offset, int len, char *buf) {
     char *blk = (char*) malloc(BLOCK_SIZE);
+    assert(blknum > 0);
     disk->ops->read(disk, blknum, 1, blk);
     char *blk_ptr = blk;
     blk_ptr += offset;
@@ -548,6 +652,7 @@ static int fs_read_block(int blknum, int offset, int len, char *buf) {
 static int fs_write(const char *path, const char *buf, size_t len,
 		     off_t offset, struct fuse_file_info *fi)
 {
+
     return -EOPNOTSUPP;
 }
 
