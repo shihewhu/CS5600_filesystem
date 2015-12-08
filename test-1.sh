@@ -55,7 +55,7 @@ case $filename in
 		;;
 	"/dir1/file.270" )
 		# echo "check sum is $cksum"
-		if [[ "$cksum" ==  "1733278825 276177 file.270" ]]; then
+		if [[ "$cksum" ==  "1733278825 276177 /tmp/file.270" ]]; then
 			echo "get /dir1/file.270 succeeds"
 		else
 			echo "get /dir1/file.270 fails"
