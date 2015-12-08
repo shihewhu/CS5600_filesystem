@@ -390,14 +390,16 @@ int fs_utime(const char *path, struct utimbuf *ut)
     return -EOPNOTSUPP;
 }
 
-//static int fs_read_3rd_level(int inum, int offset, int len, char *buf);
-//static int fs_read_2nd_level(int inum, int offset, int len, char *buf);
+
 // given block number, offset, length and return buffer, load corresponding data into buffer
 static int fs_read_block(int blknum, int offset, int len, char *buf);
 //static int fs_read_file_by_inode();
 
 // return the read in length
-static int fs_read_1st_level(char *buf, off_t offset, size_t len, const struct fs5600_inode *inode);
+static int fs_read_1st_level(const struct fs5600_inode *inode, off_t offset, size_t len, char *buf);
+// return the read in length
+static int fs_read_2nd_level(size_t root_blk, int offset, int len, char *buf);
+static int fs_read_3rd_level(size_t root_blk, int offset, int len, char *buf);
 
 /* read - read data from an open file.
  * should return exactly the number of bytes requested, except:
@@ -424,41 +426,104 @@ static int fs_read(const char *path, char *buf, size_t len, off_t offset,
     if (offset + len > size) {
         len = size - offset;
     }
-    if (offset <= 6 * BLOCK_SIZE) {
-        offset += fs_read_1st_level(buf, offset, len, inode);
+    int tmp_len = len;
+    if (offset < 6 * BLOCK_SIZE) {
+        int read_len = fs_read_1st_level(inode, offset, tmp_len, buf);
+        offset += read_len;
+        tmp_len -= read_len;
     }
-    if (offset > 6 * BLOCK_SIZE && offset <= BLOCK_SIZE / 4 * BLOCK_SIZE) {
-
-        printf("TODO\n");
-        return -EOPNOTSUPP;
+    if (offset >= 6 * BLOCK_SIZE && offset < BLOCK_SIZE / 4 * BLOCK_SIZE) {
+        int read_len = fs_read_2nd_level(inode->indir_1, offset, tmp_len, buf);
+        offset += read_len;
+        tmp_len -= read_len;
     } else
-    if (offset > BLOCK_SIZE / 4 * BLOCK_SIZE && offset <= (BLOCK_SIZE / 4) * (BLOCK_SIZE / 4) * BLOCK_SIZE) {
-        printf("TODO\n");
-        return -EOPNOTSUPP;
+    if (offset >= BLOCK_SIZE / 4 * BLOCK_SIZE && offset <= (BLOCK_SIZE / 4) * (BLOCK_SIZE / 4) * BLOCK_SIZE) {
+        fs_read_3rd_level(inode->indir_2, offset, tmp_len, buf);
     }
 
     return len;
 }
 
-static int fs_read_1st_level(char *buf, off_t offset, size_t len, const struct fs5600_inode *inode) {
+static int fs_read_1st_level(const struct fs5600_inode *inode, off_t offset, size_t len, char *buf) {
     int read_length = 0;
     int block_direct = offset / BLOCK_SIZE;
     int temp_len = len;
     int in_blk_len;
-    int temp_offset = offset % BLOCK_SIZE;
+    int in_blk_offset = offset % BLOCK_SIZE;
 
-    for (; block_direct < 6 && temp_len > 0; temp_offset = 0, block_direct++) {
-            if (temp_len > BLOCK_SIZE) {
-                in_blk_len = BLOCK_SIZE;
-                temp_len -= BLOCK_SIZE;
-            } else {
-                in_blk_len = temp_len;
-                temp_len = 0;
-            }
-            fs_read_block(inode->direct[block_direct], temp_offset, in_blk_len, buf);
-            buf += in_blk_len;
-            read_length += in_blk_len;
+    for (; block_direct < 6 && temp_len > 0; in_blk_offset = 0, block_direct++) {
+        if (temp_len + in_blk_offset > BLOCK_SIZE) {
+            in_blk_len = BLOCK_SIZE - in_blk_offset;
+            temp_len -= in_blk_len;
+        } else {
+            in_blk_len = temp_len;
+            temp_len = 0;
         }
+        fs_read_block(inode->direct[block_direct], in_blk_offset, in_blk_len, buf);
+        buf += in_blk_len;
+        read_length += in_blk_len;
+    }
+    return read_length;
+}
+
+static int fs_read_2nd_level(size_t root_blk, int offset, int len, char *buf){
+    int read_length = 0;
+
+    // height 1 tree offset
+    int h1t_offset = offset - 6 * BLOCK_SIZE;
+    int block_direct = h1t_offset / BLOCK_SIZE;
+    int temp_len = len;
+    int in_blk_len;
+    int in_blk_offset = h1t_offset % BLOCK_SIZE;
+
+
+    int h1t_blk[256];
+    disk->ops->read(disk, root_blk, 1, h1t_blk);
+
+    for (; block_direct < 256 && temp_len > 0; in_blk_offset = 0, block_direct++) {
+        if (temp_len + in_blk_offset > BLOCK_SIZE) {
+            in_blk_len = BLOCK_SIZE - in_blk_offset;
+            temp_len -= in_blk_len;
+        } else {
+            in_blk_len = temp_len;
+            temp_len = 0;
+        }
+        fs_read_block(h1t_blk[block_direct], in_blk_offset, in_blk_len, buf);
+        buf += in_blk_len;
+        read_length += in_blk_len;
+    }
+    return read_length;
+}
+
+static int fs_read_3rd_level(size_t root_blk, int offset, int len, char *buf){
+    int read_length = 0;
+
+    int h1t_block_num = BLOCK_SIZE / sizeof(int *);
+    int h1t_block_size = (BLOCK_SIZE * h1t_block_num);
+    int h2t_block_num = h1t_block_num * h1t_block_num;
+    // height 2 tree offset
+    int h2t_offset = offset - 6 * BLOCK_SIZE - h1t_block_size;
+    int block_direct = h2t_offset / h1t_block_size;
+    int temp_len = len;
+    int in_blk_len;
+    int in_blk_offset = h2t_offset % h1t_block_size;
+
+
+    int h2t_blk[256];
+    disk->ops->read(disk, root_blk, 1, h2t_blk);
+
+    for (; block_direct < h2t_block_num && temp_len > 0; in_blk_offset = 0, block_direct++) {
+        if (temp_len + in_blk_offset > h1t_block_size) {
+            in_blk_len = h1t_block_size - in_blk_offset;
+            temp_len -= in_blk_len;
+        } else {
+            in_blk_len = temp_len;
+            temp_len = 0;
+        }
+        fs_read_2nd_level(h2t_blk[block_direct], in_blk_offset, in_blk_len, buf);
+        buf += in_blk_len;
+        read_length += in_blk_len;
+    }
     return read_length;
 }
 
