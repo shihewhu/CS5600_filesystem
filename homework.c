@@ -61,19 +61,19 @@ void* fs_init(struct fuse_conn_info *conn)
     inode_map = malloc(sb.inode_map_sz * FS_BLOCK_SIZE);
     disk->ops->read(disk, 1, sb.inode_map_sz, inode_map);
     inode_map_sz = sb.inode_map_sz;
-    printf("inode map size is: %d\n", sb.inode_map_sz);
+    printf("DEBUG: inode map size is: %d\n", sb.inode_map_sz);
     
     block_map = malloc(sb.block_map_sz * FS_BLOCK_SIZE);
     disk->ops->read(disk, sb.inode_map_sz + 1, sb.block_map_sz, block_map);
     block_map_sz = sb.block_map_sz;
-    printf("block map size is: %d\n", sb.block_map_sz);
+    printf("DEBUG: block map size is: %d\n", sb.block_map_sz);
 
     /* read inodes */
     inode_region = malloc(sb.inode_region_sz * FS_BLOCK_SIZE);
     int inode_region_pos = 1 + sb.inode_map_sz + sb.block_map_sz;
     disk->ops->read(disk, inode_region_pos, sb.inode_region_sz, inode_region);
 
-    printf("inode_region_sz is: %d\n", sb.inode_region_sz);
+    printf("DEBUG: inode_region_sz is: %d\n", sb.inode_region_sz);
     inode_region_sz = sb.inode_region_sz;
 
     return NULL;
@@ -123,6 +123,9 @@ static int translate(const char *path) {
     char *token;
     char *delim = "/";
     token = strtok(_path, delim);
+    /* traverse all the subsides */
+    /* if found, return corresponding inode */
+    /* else, return error */
     while (token != NULL) {
         if (current_dir->valid == 0) {
 	        return -ENOENT;
@@ -149,19 +152,16 @@ static int translate(const char *path) {
             }
 	    }
 	    if (found == 0) {
-            printf("returning not found ENOENT: %d\n", -ENOENT);
+            printf("DEBUG: returning not found ENOENT: %d\n", -ENOENT);
             return -ENOENT;
 	    }
         token = strtok(NULL, delim);
 
     }
 
-    /* traverse all the subsides */
-    /* if found, return corresponding inode */
-    /* else, return error */
     free(dir);
     free(_path);
-    printf("inum inside translation: %d\n", inode_num);
+    printf("DEBUG: inum inside translation: %d\n", inode_num);
     return inode_num;
 }
 
@@ -289,8 +289,8 @@ static int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
     struct stat *sb = malloc(sizeof(struct stat));
     int i;
     for (i = 0; i < 32; i++) {
-        printf("name is : %s\n", dir[i].name);
-        printf("valid is : %d\n", dir[i].valid);
+        printf("DEBUG: name is : %s\n", dir[i].name);
+        printf("DEBUG: valid is : %d\n", dir[i].valid);
     	if (dir[i].valid == 0) {
     	    continue;
     	}
@@ -326,8 +326,8 @@ static char *get_name(char *path);
 */
 static int fs_mknod(const char *path, mode_t mode, dev_t dev)
 {
-    printf("entering fs_mknod\n");
-    printf("path is %s\n", path);
+    printf("DEBUG: entering fs_mknod\n");
+    printf("DEBUG: path is %s\n", path);
     // check permission, !S_ISREG(mode)
 
     if (!S_ISREG(mode)) {
@@ -339,28 +339,28 @@ static int fs_mknod(const char *path, mode_t mode, dev_t dev)
         // this means there is no nod to make, path is "/"
         return -1;
     }
-    printf("trancated path is : %s\n", father_path);
+    printf("DEBUG: trancated path is : %s\n", father_path);
     int dir_inum = translate(father_path);
-    printf("father_inode number is %d\n", dir_inum);
+    printf("DEBUG: father_inode number is %d\n", dir_inum);
     if (dir_inum == -ENOENT || dir_inum == -ENOTDIR) {
-        printf("a component is not present or intermediate component is not directory");
+        printf("DEBUG: a component is not present or intermediate component is not directory");
         return -EEXIST;
     }
     // check if dest file exists
     int inum = translate(path);
-    printf("inum : %d\n", inum);
+    printf("DEBUG: inum : %d\n", inum);
     if (inum > 0) {
         return -EEXIST;
     }
     // check entries in father dir not excceed 32
-    printf("checking excceeds 32\n");
+    printf("DEBUG: checking excceeds 32\n");
     struct fs5600_inode *father_inode = &inode_region[dir_inum];
     int free_dirent_num = find_free_dirent_num(father_inode);
     if(free_dirent_num < 0) {
         return -ENOSPC;
     }
 
-    printf("after check excceeds 32\n");
+    printf("DEBUG: after check excceeds 32\n");
     // here allocate inode region, i.e. set inode region bitmap
     time_t time_raw_format;
     time( &time_raw_format );
@@ -372,15 +372,15 @@ static int fs_mknod(const char *path, mode_t mode, dev_t dev)
             .mtime = time_raw_format,
             .size = 0,
     };
-    printf("before find free father_inode map\n");
+    printf("DEBUG: before find free father_inode map\n");
     int free_bit = find_free_inode_map_bit();
-    printf("after find free father_inode map\n");
+    printf("DEBUG: after find free father_inode map\n");
     if (free_bit < 0) {
         return -ENOSPC;
     }
     FD_SET(free_bit, inode_map);
 
-    printf("before written back\n");
+    printf("DEBUG: before written back\n");
     // write father_inode to the allocated pos in father_inode region
     memcpy(&inode_region[free_bit], &new_inode, sizeof(struct fs5600_inode));
     int offset = 1  + inode_map_sz + block_map_sz + (free_bit / 8);
@@ -405,13 +405,13 @@ static int fs_mknod(const char *path, mode_t mode, dev_t dev)
     struct fs5600_dirent *dir_blk = (struct fs5600_dirent *)malloc(BLOCK_SIZE);
     disk->ops->read(disk, (father_inode->direct)[0], 1, dir_blk);
     memcpy(&dir_blk[free_dirent_num], &new_dirent, sizeof(struct fs5600_dirent));
-    printf("before write, offset is: %d\n", blk_offset);
-    printf("before write, dir_blk name is: %s\n", dir_blk[free_dirent_num].name);
-    printf("before write, father_inode->direct[0] is: %d\n", father_inode->direct[0]);
+    printf("DEBUG: before write, offset is: %d\n", blk_offset);
+    printf("DEBUG: before write, dir_blk name is: %s\n", dir_blk[free_dirent_num].name);
+    printf("DEBUG: before write, father_inode->direct[0] is: %d\n", father_inode->direct[0]);
     disk->ops->write(disk, father_inode->direct[0], 1, dir_blk);
     free(dir_blk);
     free(_path);
-    printf("father path is: %s\n", father_path);
+    printf("DEBUG: father path is: %s\n", father_path);
     return 0;
 }
 
@@ -428,14 +428,14 @@ static char *get_name(char *path) {
 
 int find_free_inode_map_bit() {// find a free inode_region
     int inode_capacity = inode_map_sz * FS_BLOCK_SIZE * 8;
-    printf("capa is: %d\n", inode_capacity);
+    printf("DEBUG: capa is: %d\n", inode_capacity);
     int i;
     for (i = 2; i < inode_capacity; i++) {
         if (!FD_ISSET(i, inode_map)) {
             return i;
         }
     }
-    printf("inode map full.\n");
+    printf("DEBUG: inode map full.\n");
     return -ENOSPC;
 }
 
@@ -595,7 +595,9 @@ static int fs_read(const char *path, char *buf, size_t len, off_t offset,
 
     return len;
 }
-
+/*
+*
+*/
 static int fs_read_1st_level(const struct fs5600_inode *inode, off_t offset, size_t len, char *buf) {
     int read_length = 0;
     int block_direct = offset / BLOCK_SIZE;
@@ -621,8 +623,8 @@ static int fs_read_1st_level(const struct fs5600_inode *inode, off_t offset, siz
 static int fs_read_2nd_level(size_t root_blk, int offset, int len, char *buf){
     int read_length = 0;
 
-    // height 1 tree offset
-    int h1t_offset = offset - 6 * BLOCK_SIZE;
+    
+    int h1t_offset = offset - 6 * BLOCK_SIZE; // height 1 tree offset
     int block_direct = h1t_offset / BLOCK_SIZE;
     int temp_len = len;
     int in_blk_len;
@@ -652,8 +654,7 @@ static int fs_read_3rd_level(size_t root_blk, int offset, int len, char *buf){
     int h1t_block_num = BLOCK_SIZE / sizeof(int *);
     int h1t_block_size = (BLOCK_SIZE * h1t_block_num);
     int h2t_block_num = h1t_block_num * h1t_block_num;
-    // height 2 tree offset
-    int h2t_offset = offset - 6 * BLOCK_SIZE - h1t_block_size;
+    int h2t_offset = offset - 6 * BLOCK_SIZE - h1t_block_size;// height 2 tree offset
     int block_direct = h2t_offset / h1t_block_size;
     int temp_len = len;
     int in_blk_len;
@@ -700,7 +701,38 @@ static int fs_read_block(int blknum, int offset, int len, char *buf) {
 static int fs_write(const char *path, const char *buf, size_t len,
 		     off_t offset, struct fuse_file_info *fi)
 {
-    assert(0);
+    // assert(0);
+    int inum;
+    if (!(inum = translate(path))) {
+        return inum;
+    }
+    const struct fs5600_inode *inode = &inode_region[inum];
+
+    /*TODO: if offset < 6 * block size: 
+                if len + offset < 6 * BLOCKSIZE:
+                    write (offset % BLOCKSIZE) to #(offset / BLOCKSIZE) block
+                    find enough free blocks for (len - offset % BLOCKSIZE) if needed
+                    write len bytes to them
+                    offset += len
+                else:
+                    write (offset % BLOCKSIZE) to #(offset / BLOCKSIZE) block
+                    find enough free blocks for BLOCKSIZE * (6 - offset / BLOCKSIZE) if needed
+                    write BLOCKSIZE * (6 - offset / BLOCKSIZE) bytes to them
+                    offset += BLOCKSIZE * (6 - offset / BLOCKSIZE)
+    */
+    if (offset < 6 * BLOCKSIZE) {
+
+    }
+    if (offset >= 6 * BLOCK_SIZE && offset < BLOCK_SIZE / 4 * BLOCK_SIZE + 6 * BLOCK_SIZE) {
+
+    }
+    if (offset >= BLOCK_SIZE / 4 * BLOCK_SIZE + 6 * BLOCK_SIZE && offset <= (BLOCK_SIZE / 4) * (BLOCK_SIZE / 4) * BLOCK_SIZE) {
+
+    }
+    
+
+
+    
     return -EOPNOTSUPP;
 }
 
