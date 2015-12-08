@@ -4,8 +4,9 @@
 
 CFLAGS = -D_FILE_OFFSET_BITS=64 -g -Wall -Werror
 ifdef COVERAGE
-CFLAGS += -fprofile-arcs -ftest-coverage
-LD_LIBS = --coverage
+CFLAGS += -fprofile-arcs -ftest-coverage -O0
+LD_LIBS += --coverage -fprofile-arcs -ftest-coverage
+CC=gcc
 endif
 
 FILE = homework
@@ -24,4 +25,4 @@ homework: misc.o $(FILE).o image.o
 	gcc -g $^ -o $@ -lfuse $(LD_LIBS)
 
 clean: 
-	rm -f *.o homework $(TOOLS)
+	rm -f *.o homework $(TOOLS) *.gcno *.gcda
