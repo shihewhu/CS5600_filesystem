@@ -43,6 +43,7 @@ int inode_map_sz;
 int block_map_sz;
 int inode_region_sz;
 struct fs5600_inode *inode_region;	/* inodes in memory */
+void update_bitmap(void);
 
 /* init - this is called once by the FUSE framework at startup. Ignore
  * the 'conn' argument.
@@ -289,8 +290,6 @@ static int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
     struct stat *sb = malloc(sizeof(struct stat));
     int i;
     for (i = 0; i < 32; i++) {
-        printf("DEBUG: name is : %s\n", dir[i].name);
-        printf("DEBUG: valid is : %d\n", dir[i].valid);
     	if (dir[i].valid == 0) {
     	    continue;
     	}
@@ -312,6 +311,9 @@ int find_free_dirent_num(struct fs5600_inode *inode);
 int find_free_inode_map_bit();
 
 static char *get_name(char *path);
+
+
+void update_inode(int inum);
 
 /* mknod - create a new file with specified permissions
 *
@@ -373,21 +375,19 @@ static int fs_mknod(const char *path, mode_t mode, dev_t dev)
             .size = 0,
     };
     printf("DEBUG: before find free father_inode map\n");
-    int free_bit = find_free_inode_map_bit();
+    int free_inum = find_free_inode_map_bit();
     printf("DEBUG: after find free father_inode map\n");
-    if (free_bit < 0) {
+    if (free_inum < 0) {
         return -ENOSPC;
     }
-    FD_SET(free_bit, inode_map);
+    FD_SET(free_inum, inode_map);
+    update_bitmap();
 
     printf("DEBUG: before written back\n");
     // write father_inode to the allocated pos in father_inode region
-    memcpy(&inode_region[free_bit], &new_inode, sizeof(struct fs5600_inode));
-    int offset = 1  + inode_map_sz + block_map_sz + (free_bit / 8);
-    disk->ops->write(disk, offset, 1, &inode_region[free_bit / 8]);
+    memcpy(&inode_region[free_inum], &new_inode, sizeof(struct fs5600_inode));
+    update_inode(free_inum);
 
-    // write father_inode map back to inode_map
-    disk->ops->write(disk, 1, inode_map_sz, inode_map);
 
     // set valid, isDir, father_inode, name in father father_inode dirent
     // then write dirent to image
@@ -396,7 +396,7 @@ static int fs_mknod(const char *path, mode_t mode, dev_t dev)
     struct fs5600_dirent new_dirent = {
             .valid = 1,
             .isDir = 0,
-            .inode = free_bit,
+            .inode = free_inum,
             .name = "",
     };
     assert(strlen(tmp_name) < 28);
@@ -405,7 +405,6 @@ static int fs_mknod(const char *path, mode_t mode, dev_t dev)
     struct fs5600_dirent *dir_blk = (struct fs5600_dirent *)malloc(BLOCK_SIZE);
     disk->ops->read(disk, (father_inode->direct)[0], 1, dir_blk);
     memcpy(&dir_blk[free_dirent_num], &new_dirent, sizeof(struct fs5600_dirent));
-    printf("DEBUG: before write, offset is: %d\n", blk_offset);
     printf("DEBUG: before write, dir_blk name is: %s\n", dir_blk[free_dirent_num].name);
     printf("DEBUG: before write, father_inode->direct[0] is: %d\n", father_inode->direct[0]);
     disk->ops->write(disk, father_inode->direct[0], 1, dir_blk);
@@ -415,10 +414,17 @@ static int fs_mknod(const char *path, mode_t mode, dev_t dev)
     return 0;
 }
 
+void update_inode(int inum) {
+    int offset = 1 + inode_map_sz + block_map_sz + (inum / 16);
+    disk->ops->write(disk, offset, 1, &inode_region[inum / 16]);
+}
+
+
 static char *get_name(char *path) {
     int i = strlen(path) - 1;
     for (; i >= 0; i--) {
         if (path[i] == '/') {
+            i++;
             break;
         }
     }
@@ -689,6 +695,11 @@ static int fs_read_block(int blknum, int offset, int len, char *buf) {
     free(blk);
     return 0;
 }
+static int fs_write_1st_level(int inode, off_t offset, size_t len, const char *buf);
+//static int fs_write_2nd_level(size_t root_blk, int offset, int len, const char *buf);
+//static int fs_write_3rd_level(size_t root_blk, int offset, int len, const char *buf);
+int find_free_block_number();
+
 
 /* write - write data to a file
  * It should return exactly the number of bytes requested, except on
@@ -699,42 +710,136 @@ static int fs_read_block(int blknum, int offset, int len, char *buf) {
  *   but we don't)
  */
 static int fs_write(const char *path, const char *buf, size_t len,
-		     off_t offset, struct fuse_file_info *fi)
+                    off_t offset, struct fuse_file_info *fi)
 {
+    printf("entering write...\n");
+    printf("-----------------------------------------------------------\n");
     // assert(0);
+
     int inum;
+    printf("path is: %s\n", path);
     if (!(inum = translate(path))) {
+        // here checked path resolution
         return inum;
     }
-    const struct fs5600_inode *inode = &inode_region[inum];
+    struct fs5600_inode *inode = &inode_region[inum];
+    // check tmp_offset is no larger than file size
+    if (offset > inode->size) {
+        return -EINVAL;
+    }
+    int tmp_offset = offset;
 
-    /*TODO: if offset < 6 * block size: 
-                if len + offset < 6 * BLOCKSIZE:
-                    write (offset % BLOCKSIZE) to #(offset / BLOCKSIZE) block
-                    find enough free blocks for (len - offset % BLOCKSIZE) if needed
+    /*TODO: if tmp_offset < 6 * block size:
+                if len + tmp_offset < 6 * BLOCKSIZE:
+                    write (tmp_offset % BLOCKSIZE) to #(tmp_offset / BLOCKSIZE) block
+                    find enough free blocks for (len - tmp_offset % BLOCKSIZE) if needed
                     write len bytes to them
-                    offset += len
+                    tmp_offset += len
                 else:
-                    write (offset % BLOCKSIZE) to #(offset / BLOCKSIZE) block
-                    find enough free blocks for BLOCKSIZE * (6 - offset / BLOCKSIZE) if needed
-                    write BLOCKSIZE * (6 - offset / BLOCKSIZE) bytes to them
-                    offset += BLOCKSIZE * (6 - offset / BLOCKSIZE)
+                    write (tmp_offset % BLOCKSIZE) to #(tmp_offset / BLOCKSIZE) block
+                    find enough free blocks for BLOCKSIZE * (6 - tmp_offset / BLOCKSIZE) if needed
+                    write BLOCKSIZE * (6 - tmp_offset / BLOCKSIZE) bytes to them
+                    tmp_offset += BLOCKSIZE * (6 - tmp_offset / BLOCKSIZE)
     */
-    if (offset < 6 * BLOCKSIZE) {
-
+    int tmp_len = len;
+    if (tmp_offset < 6 * BLOCK_SIZE) {
+        int written_len = fs_write_1st_level(inum, tmp_offset, tmp_len, buf);
+        tmp_offset += written_len;
+        tmp_len -= written_len;
     }
-    if (offset >= 6 * BLOCK_SIZE && offset < BLOCK_SIZE / 4 * BLOCK_SIZE + 6 * BLOCK_SIZE) {
-
+    if (tmp_offset >= 6 * BLOCK_SIZE && tmp_offset < BLOCK_SIZE / 4 * BLOCK_SIZE + 6 * BLOCK_SIZE) {
+        return -EOPNOTSUPP;
     }
-    if (offset >= BLOCK_SIZE / 4 * BLOCK_SIZE + 6 * BLOCK_SIZE && offset <= (BLOCK_SIZE / 4) * (BLOCK_SIZE / 4) * BLOCK_SIZE) {
-
+    if (tmp_offset >= BLOCK_SIZE / 4 * BLOCK_SIZE + 6 * BLOCK_SIZE && tmp_offset <= (BLOCK_SIZE / 4) * (BLOCK_SIZE / 4) * BLOCK_SIZE) {
+        return -EOPNOTSUPP;
     }
     
 
 
-    
+    // update inode size
+    printf("updated size of inode is: %d\n", (int) (offset + len));
+    inode->size = offset + len;
+    update_inode(inum);
+    return len;
     return -EOPNOTSUPP;
 }
+
+static int fs_write_1st_level(int inum, off_t offset, size_t len, const char *buf) {
+    int written_length = 0;
+    struct fs5600_inode *inode = &inode_region[inum];
+    int block_direct = offset / BLOCK_SIZE;
+    int temp_len = len;
+    int in_blk_len;
+    int in_blk_offset = offset % BLOCK_SIZE;
+
+    for (; block_direct < 6 && temp_len > 0; in_blk_offset = 0, block_direct++) {
+        if (temp_len + in_blk_offset > BLOCK_SIZE) {
+            in_blk_len = BLOCK_SIZE - in_blk_offset;
+            temp_len -= in_blk_len;
+        } else {
+            in_blk_len = temp_len;
+            temp_len = 0;
+        }
+        printf("DEBUG: progress.txt inode directory 0 is: %d\n", inode->direct[0]);
+        printf("DEBUG: progress.txt inode directory 1 is: %d\n", inode->direct[1]);
+        printf("DEBUG: progress.txt inode directory 2 is: %d\n", inode->direct[2]);
+        // if there is already allocated
+        if (inode->direct[block_direct] == 0) {
+            // find a free block
+            int blk_num = find_free_block_number();
+            if (blk_num < 0) {
+                assert(blk_num > 0);
+                return -ENOSPC;
+            }
+
+            // change the inode
+            inode->direct[block_direct] = blk_num;
+            update_inode(inum);
+
+            // set the block bitmap
+            FD_SET(blk_num, block_map);
+            update_bitmap();
+        }
+        // write data to the found or given block
+        char *blk = (char*) malloc(BLOCK_SIZE);
+        disk->ops->read(disk, inode->direct[block_direct], 1, blk);
+        memcpy(blk + in_blk_offset, buf, in_blk_len);
+        printf("DEBUG: in_blk_offset: %d\n", (int ) (in_blk_offset));
+        printf("DEBUG: in_blk_len: %d\n", (int ) (in_blk_len));
+        printf("DEBUG: blk content is %s\n", blk);
+        disk->ops->write(disk, inode->direct[block_direct], 1, blk);
+        buf += in_blk_len;
+        written_length += in_blk_len;
+    }
+    return written_length;
+}
+
+void update_bitmap() {
+    disk->ops->write(disk, 1, inode_map_sz, inode_map);
+    disk->ops->write(disk, 1 + inode_map_sz, block_map_sz, block_map);
+}
+
+
+int find_free_block_number() {
+    int i;
+    for (i = 0; i < block_map_sz * BLOCK_SIZE * sizeof(char); i++) {
+                if (!FD_ISSET(i, block_map)) {
+                    return i;
+                }
+            }
+    return -ENOSPC;
+}
+
+//static int fs_write_block(int blknum, int offset, int len, char *buf) {
+//    char *blk = (char*) malloc(BLOCK_SIZE);
+//    assert(blknum > 0);
+//    disk->ops->read(disk, blknum, 1, blk);
+//    char *blk_ptr = blk;
+//    blk_ptr += offset;
+//    memcpy(buf, blk_ptr, len);
+//    free(blk);
+//    return 0;
+//}
 
 /* statfs - get file system statistics
  * see 'man 2 statfs' for description of 'struct statvfs'.
