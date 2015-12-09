@@ -195,7 +195,7 @@ int trancate_path (const char *path, char **trancated_path) {
 
 static void set_attr(struct fs5600_inode *inode, struct stat *sb) {
     /* set every other bit to zero */
-    memset(sb, 0, sizeof(*sb));
+    memset(sb, 0, sizeof(struct stat));
     sb->st_mode = inode->mode;
     sb->st_uid = inode->uid;
     sb->st_size = inode->size;
@@ -217,6 +217,7 @@ static void set_attr(struct fs5600_inode *inode, struct stat *sb) {
  */
 static int fs_getattr(const char *path, struct stat *sb)
 {
+    fs_init(NULL);
     int inum = translate(path);
     if (inum == -ENOENT) {
     	return -ENOENT;
@@ -264,6 +265,7 @@ int inode_is_dir(int father_inum, int inum) {
 static int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
 		       off_t offset, struct fuse_file_info *fi)
 {
+    printf("DEBUG: path is %s\n", path);
     char *trancated_path;
     int father_inum = 0;
     // if succeeded in trancating path
@@ -282,31 +284,48 @@ static int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
     struct fs5600_inode *inode;
     struct fs5600_dirent *dir;
     dir = malloc(FS_BLOCK_SIZE);
-    
+    printf("-----------------------------------\n");
+    printf("translated and 2nd ls\n");
+//    sleep(1);
+//    fs_init(NULL);
     inode = &inode_region[inum];
     // assert is dir
+    printf("DEBUG: inode mode is %d\n", (int)inode->mode);
+//    sleep(2);
     assert(S_ISDIR(inode->mode));
     int block_pos = inode->direct[0];
     disk->ops->read(disk, block_pos, 1, dir);
-
+    printf("read into block\n");
     int curr_inum;
     struct fs5600_inode *curr_inode;
     char *name;
-    struct stat *sb = malloc(sizeof(struct stat));
+    struct stat sb;
+//            = malloc(sizeof(struct stat));
+
     int i;
     for (i = 0; i < 32; i++) {
+        printf("DEBUG: name: %s, valid: %d, isDir: %d, inum: %d\n",
+               dir[i].name, dir[i].valid, dir[i].isDir, dir[i].inode);
     	if (dir[i].valid == 0) {
     	    continue;
     	}
+//        fs_init(NULL);
     	curr_inum = dir[i].inode;
-    	curr_inode = &inode_region[curr_inum];
+        printf("curr inum is : %d\n", curr_inum);
+//    	update_inode(curr_inum);
+        curr_inode = &inode_region[curr_inum];
 
     	name = dir[i].name;
-    	set_attr(curr_inode, sb);
-    	filler(NULL, name, sb, 0);
+//        printf("current inode info is:\n mode: %d, uid: %d, size: %d, ctime: %d\n",
+//                                            curr_inode->mode, curr_inode->uid, curr_inode->size, curr_inode->ctime);
+        printf("current inode name is: %s\n", name);
+    	set_attr(curr_inode, &sb);
+        printf("before calling filler\n");
+//        sleep(1);
+    	filler(NULL, name, &sb, 0);
     }
-
-    free(sb);
+    printf("before freeing sb\n");
+//    free(sb);
     free(dir);
     return 0;
 }
@@ -421,7 +440,7 @@ static int fs_mknod(const char *path, mode_t mode, dev_t dev)
 
 void update_inode(int inum) {
     int offset = 1 + inode_map_sz + block_map_sz + (inum / 16);
-    disk->ops->write(disk, offset, 1, &inode_region[inum / 16]);
+    disk->ops->write(disk, offset, 1, &inode_region[inum - (inum % 16)]);
 }
 
 
@@ -458,7 +477,7 @@ int find_free_dirent_num(struct fs5600_inode *inode) {
     int free_dirent_num = -1;
     int i;
     for (i = 0; i < 32; i++) {
-        printf("%dth dirent in root directory is %d\n", i, dir->valid);
+//        printf("%dth dirent in root directory is %d\n", i, dir->valid);
         if (!dir[i].valid) {
             free_dirent_num = i;
             break;
@@ -683,20 +702,22 @@ static int fs_unlink(const char *path)
     
     struct fs5600_dirent *father_dir = malloc(FS_BLOCK_SIZE);
     disk->ops->read(disk, father_inode->direct[0], 1, father_dir);
+    int found = 0;
     int i;
     for (i = 0; i < 32; ++i) {
-        if (strcmp(father_dir[i].name, name)) {
-            father_dir[i].valid = 0;
-            break;
+        if (strcmp(father_dir[i].name, name) == 0) {
+            printf("DEBUG: father dir order is: %d\n", i);
+            if (father_dir[i].valid == 1 ) {
+                father_dir[i].valid = 0;
+                found = 1;
+            }
         }
     }
-
     disk->ops->write(disk, father_inode->direct[0], 1, father_dir);
-    free(father_dir);
-    free(name);
-    if (i == 32) {
+    if (!found) {
         return -ENOENT;
     }
+    free(father_dir);
     free(_path);
     return 0;
 }
@@ -844,7 +865,7 @@ int fs_utime(const char *path, struct utimbuf *ut)
     // assert is dir
     // assert(S_ISREG(inode->mode));
     // int block_pos = inode->direct[0];
-    inode->mtime = utimbuf[1];
+    inode->mtime = ut->modtime;
     update_inode(inum);
     return -EOPNOTSUPP;
 }
