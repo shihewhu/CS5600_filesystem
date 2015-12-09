@@ -696,7 +696,7 @@ static int fs_read_block(int blknum, int offset, int len, char *buf) {
     return 0;
 }
 static int fs_write_1st_level(int inode, off_t offset, size_t len, const char *buf);
-//static int fs_write_2nd_level(size_t root_blk, int offset, int len, const char *buf);
+static int fs_write_2nd_level(size_t root_blk, int offset, int len, const char *buf);
 //static int fs_write_3rd_level(size_t root_blk, int offset, int len, const char *buf);
 int find_free_block_number();
 
@@ -748,6 +748,24 @@ static int fs_write(const char *path, const char *buf, size_t len,
         tmp_len -= written_len;
     }
     if (tmp_offset >= 6 * BLOCK_SIZE && tmp_offset < BLOCK_SIZE / 4 * BLOCK_SIZE + 6 * BLOCK_SIZE) {
+        // if indir_1 not set, set it
+        if (inode->indir_1 == 0) {
+            // find a free block
+            int blk_num = find_free_block_number();
+            if (blk_num < 0) {
+                assert(blk_num > 0);
+                return -ENOSPC;
+            }
+            // change the inode
+            inode->indir_1 = blk_num;
+            update_inode(inum);
+            // set the block bitmap
+            FD_SET(blk_num, block_map);
+            update_bitmap();
+        }
+        int written_len = fs_write_2nd_level(inode->indir_1, tmp_offset, tmp_len, buf);
+        tmp_offset += written_len;
+        tmp_len -= written_len;
         return -EOPNOTSUPP;
     }
     if (tmp_offset >= BLOCK_SIZE / 4 * BLOCK_SIZE + 6 * BLOCK_SIZE && tmp_offset <= (BLOCK_SIZE / 4) * (BLOCK_SIZE / 4) * BLOCK_SIZE) {
@@ -804,12 +822,42 @@ static int fs_write_1st_level(int inum, off_t offset, size_t len, const char *bu
         char *blk = (char*) malloc(BLOCK_SIZE);
         disk->ops->read(disk, inode->direct[block_direct], 1, blk);
         memcpy(blk + in_blk_offset, buf, in_blk_len);
-        printf("DEBUG: in_blk_offset: %d\n", (int ) (in_blk_offset));
-        printf("DEBUG: in_blk_len: %d\n", (int ) (in_blk_len));
-        printf("DEBUG: blk content is %s\n", blk);
         disk->ops->write(disk, inode->direct[block_direct], 1, blk);
         buf += in_blk_len;
         written_length += in_blk_len;
+    }
+    return written_length;
+}
+
+static int fs_write_2nd_level(size_t root_blk, int offset, int len, const char *buf){
+    int written_length = 0;
+
+
+    int h1t_offset = offset - 6 * BLOCK_SIZE; // height 1 tree offset
+    int block_direct = h1t_offset / BLOCK_SIZE;
+    int temp_len = len;
+    int in_blk_len;
+    int in_blk_offset = h1t_offset % BLOCK_SIZE;
+
+
+    int h1t_blk[256];
+    disk->ops->read(disk, root_blk, 1, h1t_blk);
+
+    for (; block_direct < 256 && temp_len > 0; in_blk_offset = 0, block_direct++) {
+        if (temp_len + in_blk_offset > BLOCK_SIZE) {
+            in_blk_len = BLOCK_SIZE - in_blk_offset;
+            temp_len -= in_blk_len;
+        } else {
+            in_blk_len = temp_len;
+            temp_len = 0;
+        }
+        printf("DEBUG: h1t_blk direct is: %d\n", h1t_blk[block_direct]);
+//        if (h1t_blk[block_direct] == 0) {
+//
+//        }
+//        fs_read_block(h1t_blk[block_direct], in_blk_offset, in_blk_len, buf);
+//        buf += in_blk_len;
+//        written_length += in_blk_len;
     }
     return written_length;
 }
