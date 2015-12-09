@@ -832,6 +832,20 @@ static int fs_chmod(const char *path, mode_t mode)
  */
 int fs_utime(const char *path, struct utimbuf *ut)
 {
+    int inum = translate(path);
+    if (inum < 0) {
+    	return inum;
+    }
+    struct fs5600_inode *inode;
+    // struct fs5600_dirent *dir;
+    // dir = malloc(FS_BLOCK_SIZE);
+    
+    inode = &inode_region[inum];
+    // assert is dir
+    // assert(S_ISREG(inode->mode));
+    // int block_pos = inode->direct[0];
+    inode->mtime = utimbuf[1];
+    update_inode(inum);
     return -EOPNOTSUPP;
 }
 
