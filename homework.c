@@ -30,7 +30,13 @@
  * NOTE - blkdev access is in terms of 1024-byte blocks
  */
 extern struct blkdev *disk;
-
+void print_with_length(const char * buf, int len) {
+    int i = 0;
+    for (; i < len; i++) {
+        printf("%c", buf[i]);
+    }
+    printf("\n");
+}
 /* by defining bitmaps as 'fd_set' pointers, you can use existing
  * macros to handle them. 
  *   FD_ISSET(##, inode_map);
@@ -162,7 +168,7 @@ static int translate(const char *path) {
 
     free(dir);
     free(_path);
-    printf("DEBUG: inum inside translation: %d\n", inode_num);
+//    printf("DEBUG: inum inside translation: %d\n", inode_num);
     return inode_num;
 }
 
@@ -589,11 +595,13 @@ static int fs_read(const char *path, char *buf, size_t len, off_t offset,
         int read_len = fs_read_1st_level(inode, offset, tmp_len, buf);
         offset += read_len;
         tmp_len -= read_len;
+        buf += read_len;
     }
     if (offset >= 6 * BLOCK_SIZE && offset < BLOCK_SIZE / 4 * BLOCK_SIZE + 6 * BLOCK_SIZE) {
         int read_len = fs_read_2nd_level(inode->indir_1, offset, tmp_len, buf);
         offset += read_len;
         tmp_len -= read_len;
+        buf += read_len;
     }
     if (offset >= BLOCK_SIZE / 4 * BLOCK_SIZE + 6 * BLOCK_SIZE && offset <= (BLOCK_SIZE / 4) * (BLOCK_SIZE / 4) * BLOCK_SIZE) {
         fs_read_3rd_level(inode->indir_2, offset, tmp_len, buf);
@@ -659,7 +667,6 @@ static int fs_read_3rd_level(size_t root_blk, int offset, int len, char *buf){
     int read_length = 0;
     int h1t_block_num = BLOCK_SIZE / sizeof(int *);
     int h1t_block_size = (BLOCK_SIZE * h1t_block_num);
-    int h2t_block_num = h1t_block_num * h1t_block_num;
     int h2t_offset = offset - 6 * BLOCK_SIZE - h1t_block_size;// height 2 tree offset
     int block_direct = h2t_offset / h1t_block_size;
     int temp_len = len;
@@ -670,7 +677,7 @@ static int fs_read_3rd_level(size_t root_blk, int offset, int len, char *buf){
     int h2t_blk[256];
     disk->ops->read(disk, root_blk, 1, h2t_blk);
 
-    for (; block_direct < h2t_block_num && temp_len > 0; in_blk_offset = 0, block_direct++) {
+    for (; block_direct < 256 && temp_len > 0; in_blk_offset = 0, block_direct++) {
         if (temp_len + in_blk_offset > h1t_block_size) {
             in_blk_len = h1t_block_size - in_blk_offset;
             temp_len -= in_blk_len;
@@ -697,7 +704,7 @@ static int fs_read_block(int blknum, int offset, int len, char *buf) {
 }
 static int fs_write_1st_level(int inode, off_t offset, size_t len, const char *buf);
 static int fs_write_2nd_level(size_t root_blk, int offset, int len, const char *buf);
-//static int fs_write_3rd_level(size_t root_blk, int offset, int len, const char *buf);
+static int fs_write_3rd_level(size_t root_blk, int offset, int len, const char *buf);
 int find_free_block_number();
 
 
@@ -712,12 +719,9 @@ int find_free_block_number();
 static int fs_write(const char *path, const char *buf, size_t len,
                     off_t offset, struct fuse_file_info *fi)
 {
-    printf("entering write...\n");
-    printf("-----------------------------------------------------------\n");
     // assert(0);
 
     int inum;
-    printf("path is: %s\n", path);
     if (!(inum = translate(path))) {
         // here checked path resolution
         return inum;
@@ -729,23 +733,12 @@ static int fs_write(const char *path, const char *buf, size_t len,
     }
     int tmp_offset = offset;
 
-    /*TODO: if tmp_offset < 6 * block size:
-                if len + tmp_offset < 6 * BLOCKSIZE:
-                    write (tmp_offset % BLOCKSIZE) to #(tmp_offset / BLOCKSIZE) block
-                    find enough free blocks for (len - tmp_offset % BLOCKSIZE) if needed
-                    write len bytes to them
-                    tmp_offset += len
-                else:
-                    write (tmp_offset % BLOCKSIZE) to #(tmp_offset / BLOCKSIZE) block
-                    find enough free blocks for BLOCKSIZE * (6 - tmp_offset / BLOCKSIZE) if needed
-                    write BLOCKSIZE * (6 - tmp_offset / BLOCKSIZE) bytes to them
-                    tmp_offset += BLOCKSIZE * (6 - tmp_offset / BLOCKSIZE)
-    */
     int tmp_len = len;
     if (tmp_offset < 6 * BLOCK_SIZE) {
         int written_len = fs_write_1st_level(inum, tmp_offset, tmp_len, buf);
         tmp_offset += written_len;
         tmp_len -= written_len;
+        buf += written_len;
     }
     if (tmp_offset >= 6 * BLOCK_SIZE && tmp_offset < BLOCK_SIZE / 4 * BLOCK_SIZE + 6 * BLOCK_SIZE) {
         // if indir_1 not set, set it
@@ -766,18 +759,36 @@ static int fs_write(const char *path, const char *buf, size_t len,
         int written_len = fs_write_2nd_level(inode->indir_1, tmp_offset, tmp_len, buf);
         tmp_offset += written_len;
         tmp_len -= written_len;
-        return -EOPNOTSUPP;
+        buf += written_len;
     }
     if (tmp_offset >= BLOCK_SIZE / 4 * BLOCK_SIZE + 6 * BLOCK_SIZE && tmp_offset <= (BLOCK_SIZE / 4) * (BLOCK_SIZE / 4) * BLOCK_SIZE) {
-        return -EOPNOTSUPP;
+        // if indir_2 not set, set it
+        if (inode->indir_2 == 0) {
+            // find a free block
+            int blk_num = find_free_block_number();
+            if (blk_num < 0) {
+                assert(blk_num > 0);
+                return -ENOSPC;
+            }
+            // change the inode
+            inode->indir_2 = blk_num;
+            update_inode(inum);
+            // set the block bitmap
+            FD_SET(blk_num, block_map);
+            update_bitmap();
+        }
+        fs_write_3rd_level(inode->indir_2, tmp_offset, tmp_len, buf);
+
     }
     
 
 
     // update inode size
-    printf("updated size of inode is: %d\n", (int) (offset + len));
-    inode->size = offset + len;
-    update_inode(inum);
+//    printf("updated size of inode is: %d\n", (int) (offset + len));
+    if (offset + len > inode->size) {
+        inode->size = offset + len;
+        update_inode(inum);
+    }
     return len;
     return -EOPNOTSUPP;
 }
@@ -798,9 +809,6 @@ static int fs_write_1st_level(int inum, off_t offset, size_t len, const char *bu
             in_blk_len = temp_len;
             temp_len = 0;
         }
-        printf("DEBUG: progress.txt inode directory 0 is: %d\n", inode->direct[0]);
-        printf("DEBUG: progress.txt inode directory 1 is: %d\n", inode->direct[1]);
-        printf("DEBUG: progress.txt inode directory 2 is: %d\n", inode->direct[2]);
         // if there is already allocated
         if (inode->direct[block_direct] == 0) {
             // find a free block
@@ -831,8 +839,6 @@ static int fs_write_1st_level(int inum, off_t offset, size_t len, const char *bu
 
 static int fs_write_2nd_level(size_t root_blk, int offset, int len, const char *buf){
     int written_length = 0;
-
-
     int h1t_offset = offset - 6 * BLOCK_SIZE; // height 1 tree offset
     int block_direct = h1t_offset / BLOCK_SIZE;
     int temp_len = len;
@@ -851,14 +857,80 @@ static int fs_write_2nd_level(size_t root_blk, int offset, int len, const char *
             in_blk_len = temp_len;
             temp_len = 0;
         }
-        printf("DEBUG: h1t_blk direct is: %d\n", h1t_blk[block_direct]);
-//        if (h1t_blk[block_direct] == 0) {
-//
-//        }
-//        fs_read_block(h1t_blk[block_direct], in_blk_offset, in_blk_len, buf);
-//        buf += in_blk_len;
-//        written_length += in_blk_len;
+        // if h1t_blk block direct is not used, allocate a block
+        if (h1t_blk[block_direct] == 0) {
+            // find a free block
+            int blk_num = find_free_block_number();
+            if (blk_num < 0) {
+                assert(blk_num > 0);
+                return -ENOSPC;
+            }
+
+            // change the h1t block and write back
+            h1t_blk[block_direct] = blk_num;
+            disk->ops->write(disk, root_blk, 1, h1t_blk);
+
+            // set the block bitmap
+            FD_SET(blk_num, block_map);
+            update_bitmap();
+        }
+        char *blk = (char*) malloc(BLOCK_SIZE);
+        disk->ops->read(disk, h1t_blk[block_direct], 1, blk);
+        memcpy(blk + in_blk_offset, buf, in_blk_len);
+
+        disk->ops->write(disk, h1t_blk[block_direct], 1, blk);
+        free(blk);
+        buf += in_blk_len;
+        written_length += in_blk_len;
     }
+
+    return written_length;
+}
+
+static int fs_write_3rd_level(size_t root_blk, int offset, int len, const char *buf) {
+    printf("entering level 3...\n");
+    int written_length = 0;
+    int h1t_block_num = BLOCK_SIZE / sizeof(int *);
+    int h1t_block_size = (BLOCK_SIZE * h1t_block_num);
+    int h2t_offset = offset - 6 * BLOCK_SIZE - h1t_block_size;// height 2 tree offset
+    int block_direct = h2t_offset / h1t_block_size;
+    int temp_len = len;
+    int in_blk_len;
+    int in_blk_offset = h2t_offset % h1t_block_size;
+
+    int h2t_blk[256];
+    disk->ops->read(disk, root_blk, 1, h2t_blk);
+
+    for (; block_direct < 256 && temp_len > 0; in_blk_offset = 0, block_direct++) {
+        if (temp_len + in_blk_offset > h1t_block_size) {
+            in_blk_len = h1t_block_size - in_blk_offset;
+            temp_len -= in_blk_len;
+        } else {
+            in_blk_len = temp_len;
+            temp_len = 0;
+        }
+        // if h2t_blk block direct is not used, allocate a block
+        if (h2t_blk[block_direct] == 0) {
+            // find a free block
+            int blk_num = find_free_block_number();
+            if (blk_num < 0) {
+                assert(blk_num > 0);
+                return -ENOSPC;
+            }
+
+            // change the h2t block and write back
+            h2t_blk[block_direct] = blk_num;
+            disk->ops->write(disk, root_blk, 1, h2t_blk);
+
+            // set the block bitmap
+            FD_SET(blk_num, block_map);
+            update_bitmap();
+        }
+        fs_write_2nd_level(h2t_blk[block_direct], in_blk_offset + 6 * BLOCK_SIZE, in_blk_len, buf);
+        buf += in_blk_len;
+        written_length += in_blk_len;
+    }
+
     return written_length;
 }
 
