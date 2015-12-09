@@ -803,14 +803,25 @@ static int fs_rename(const char *src_path, const char *dst_path)
  *
  * Errors - path resolution, ENOENT.
  */
- /*TODO: He is doing this*/
+ /*TODO: finished: simple test passed but need more test*/
 static int fs_chmod(const char *path, mode_t mode)
 {
     int inum = translate(path);
     if (inum < 0) {
     	return inum;
     }
-    return -EOPNOTSUPP;
+    struct fs5600_inode *inode;
+    // struct fs5600_dirent *dir;
+    // dir = malloc(FS_BLOCK_SIZE);
+    
+    inode = &inode_region[inum];
+    // assert is dir
+    // assert(S_ISREG(inode->mode));
+    // int block_pos = inode->direct[0];
+    inode->mode = mode;
+    update_inode(inum);
+    // disk->ops->read(disk, block_pos, 1, dir);
+    return 0;
 }
 
 /* utime - change access and modification times (see 'man utime')
