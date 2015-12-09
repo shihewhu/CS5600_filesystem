@@ -434,6 +434,7 @@ static char *get_name(char *path) {
         }
     }
     char *result = &path[i];
+    printf("DEBUG: result is %s\n", result);
     return result;
 }
 
@@ -677,7 +678,9 @@ static int fs_unlink(const char *path)
     update_bitmap();
 
     // remove entry from father dir
-    char *name = get_name(path);
+    char *_path = strdup(path);
+    char *name = get_name(_path);
+    
     struct fs5600_dirent *father_dir = malloc(FS_BLOCK_SIZE);
     disk->ops->read(disk, father_inode->direct[0], 1, father_dir);
     int i;
@@ -694,6 +697,7 @@ static int fs_unlink(const char *path)
     if (i == 32) {
         return -ENOENT;
     }
+    free(_path);
     return 0;
 }
 
@@ -720,17 +724,17 @@ static int fs_rmdir(const char *path)
  * destination file, and replace an empty directory with a full one.
  */
 
- /*TODO: has bug*/
+ /*TODO: finished: compile succeeds, simple test passed, need more test*/
 static int fs_rename(const char *src_path, const char *dst_path)
 {	
 	/*check exists of src file and dst file*/
 	int src_inum, dst_inum;
-	printf("DEBUG: src_path is %s\n", src_path);
-	printf("DEBUG: dst_path is %s\n", dst_path);
+	// printf("DEBUG: src_path is %s\n", src_path);
+	// printf("DEBUG: dst_path is %s\n", dst_path);
 	src_inum = translate(src_path);
 	dst_inum = translate(dst_path);
-	printf("DEBUG: src_inum is %d\n", src_inum);
-	printf("DEBUG: dst_inum is %d\n", dst_inum);
+	// printf("DEBUG: src_inum is %d\n", src_inum);
+	// printf("DEBUG: dst_inum is %d\n", dst_inum);
    	if (src_inum < 0)  {
    		return -ENOENT;
    	}
@@ -750,13 +754,14 @@ static int fs_rename(const char *src_path, const char *dst_path)
    	if (!(father_inum = translate(src_father_path))) {
    		return father_inum;
    	}
+   	// printf("DEBUG: father_inum is %d\n", father_inum);
    	/*get the name of the src and dst path*/
    	char *_src_path = strdup(src_path);
    	char *src_name = get_name(_src_path);
-   	free(_src_path);
+   	// printf("DEBUG: src_name is %s\n", src_name);
    	char *_dst_path = strdup(dst_path);
    	char *dst_name = get_name(_dst_path);
-   	free(_dst_path);
+   	
    	/*load dirent block to memory to search src file name*/
    	struct fs5600_inode *inode;
     struct fs5600_dirent *dir;
@@ -769,27 +774,42 @@ static int fs_rename(const char *src_path, const char *dst_path)
     disk->ops->read(disk, block_pos, 1, dir);
     int i;
     int result = -ENOENT;
+    // printf("DEBUG: start search for name and change name\n");
+    /*traverse the drient block to find the dirent with the same name*/
     for (i = 0;i < 32; i++) {
-    	if (strcmp(dir[i].name, src_name)) {
+    	// printf("DEBUG: %dth iteration, dir.name is %s, file name is %s\n", i, dir[i].name, src_name);
+    	if (dir[i].valid == 1 && strcmp(dir[i].name, src_name) == 0) {
+    		// printf("DEBUG: got the file and changing name, %s\n", dir[i].name);
     		strncpy(dir[i].name, dst_name, strlen(dst_name));
+    		// printf("DEBUG: change the name to %s\n", dir[i].name);
     		dir[i].name[strlen(dst_name)] = '\0';
     		disk->ops->write(disk, block_pos, 1, dir);
-    		result = 1;
+    		// printf("DEBUG: we have finished rename\n");
+    		result = 0;
     	}
     }
-    free(dst_name);
-    free(src_name);
+    assert(result == 0);
+    free(_src_path);
+    free(_dst_path);
+    // free(dst_name);
+    // free(src_name);
    	free(src_father_path);
    	free(dst_father_path);
-    return -result;
+   	// printf("DEBUG: returning %d\n", result);
+    return result;
 }
 
 /* chmod - change file permissions
  *
  * Errors - path resolution, ENOENT.
  */
+ /*TODO: He is doing this*/
 static int fs_chmod(const char *path, mode_t mode)
 {
+    int inum = translate(path);
+    if (inum < 0) {
+    	return inum;
+    }
     return -EOPNOTSUPP;
 }
 
