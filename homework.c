@@ -575,6 +575,10 @@ static int fs_mkdir(const char *path, mode_t mode)
     // return -EOPNOTSUPP;
 }
 
+void truncate_2nd_level(int h1t_root_blk_num);
+
+void truncate_3rd_level(int h2t_root_blk_num);
+
 /* truncate - truncate file to exactly 'len' bytes
  * Errors - path resolution, ENOENT, EISDIR, EINVAL
  *    return EINVAL if len > 0.
@@ -588,7 +592,58 @@ static int fs_truncate(const char *path, off_t len)
     if (len != 0)
 	return -EINVAL;		/* invalid argument */
 
-    return -EOPNOTSUPP;
+    int inum = translate(path);
+    if (inum == -ENOENT || inum == EISDIR) {
+        return inum;
+    }
+
+    struct fs5600_inode *inode = &inode_region[inum];
+    // clear the block bit map of this inode
+    int temp_blk_num;
+    for (int i = 0; i < 6; i++) {
+        temp_blk_num = inode->direct[i];
+        if (temp_blk_num != 0) {
+            FD_CLR(temp_blk_num, block_map);
+            update_bitmap();
+        } else {
+            break;
+        }
+    }
+    if (inode->size >= (BLOCK_SIZE / 4) * BLOCK_SIZE) {
+        truncate_2nd_level(inode->indir_1);
+    }
+
+    if (inode->size >= (BLOCK_SIZE / 4) * (BLOCK_SIZE / 4) * BLOCK_SIZE) {
+        truncate_3rd_level(inode->indir_2);
+    }
+
+    // set the size of inode as 0
+    inode_region[inum].size = 0;
+    update_inode(inum);
+    return 0;
+}
+
+
+void truncate_2nd_level(int h1t_root_blk_num) {
+    int h1t_blk[256];
+    disk->ops->read(disk, h1t_root_blk_num, 1, h1t_blk);
+    for (int i = 0; i < 256; ++i) {
+        int temp_blk_num = h1t_blk[i];
+        if (temp_blk_num != 0) {
+            FD_CLR(temp_blk_num, block_map);
+            update_bitmap();
+        } else {
+            break;
+        }
+    }
+}
+
+void truncate_3rd_level(int h2t_root_blk_num) {
+    int h2t_blk[256];
+    disk->ops->read(disk, h2t_root_blk_num, 1, h2t_blk);
+    for (int i = 0; i < 256; ++i) {
+        truncate_2nd_level(h2t_blk[i]);
+    }
 }
 
 /* unlink - delete a file
