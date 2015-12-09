@@ -458,7 +458,8 @@ int find_free_dirent_num(struct fs5600_inode *inode) {
     int free_dirent_num = -1;
     int i;
     for (i = 0; i < 32; i++) {
-        if (!dir->valid) {
+        printf("%dth dirent in root directory is %d\n", i, dir->valid);
+        if (!dir[i].valid) {
             free_dirent_num = i;
             break;
         }
@@ -888,7 +889,6 @@ static int fs_write_2nd_level(size_t root_blk, int offset, int len, const char *
 }
 
 static int fs_write_3rd_level(size_t root_blk, int offset, int len, const char *buf) {
-    printf("entering level 3...\n");
     int written_length = 0;
     int h1t_block_num = BLOCK_SIZE / sizeof(int *);
     int h1t_block_size = (BLOCK_SIZE * h1t_block_num);
