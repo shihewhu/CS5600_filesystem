@@ -335,7 +335,7 @@ int find_free_dirent_num(struct fs5600_inode *inode);
 int find_free_inode_map_bit();
 
 static char *get_name(char *path);
-
+static char *strip(char *path);
 
 void update_inode(int inum);
 
@@ -443,7 +443,11 @@ void update_inode(int inum) {
     disk->ops->write(disk, offset, 1, &inode_region[inum - (inum % 16)]);
 }
 
-
+static void strip(char *path) {
+	if (path[strlen(path) - 1] == '/') {
+		path[strlen(path) - 1] = '\0'; 
+	}
+}
 static char *get_name(char *path) {
     int i = strlen(path) - 1;
     for (; i >= 0; i--) {
