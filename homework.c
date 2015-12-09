@@ -779,7 +779,6 @@ static int fs_write(const char *path, const char *buf, size_t len,
         }
         fs_write_3rd_level(inode->indir_2, tmp_offset, tmp_len, buf);
 
-        return -EOPNOTSUPP;
     }
     
 
@@ -879,10 +878,9 @@ static int fs_write_2nd_level(size_t root_blk, int offset, int len, const char *
         disk->ops->read(disk, h1t_blk[block_direct], 1, blk);
         memcpy(blk + in_blk_offset, buf, in_blk_len);
 
-        buf += in_blk_len;
-
         disk->ops->write(disk, h1t_blk[block_direct], 1, blk);
         free(blk);
+        buf += in_blk_len;
         written_length += in_blk_len;
     }
 
@@ -890,13 +888,13 @@ static int fs_write_2nd_level(size_t root_blk, int offset, int len, const char *
 }
 
 static int fs_write_3rd_level(size_t root_blk, int offset, int len, const char *buf) {
+    printf("entering level 3...\n");
     int written_length = 0;
     int h1t_block_num = BLOCK_SIZE / sizeof(int *);
     int h1t_block_size = (BLOCK_SIZE * h1t_block_num);
     int h2t_offset = offset - 6 * BLOCK_SIZE - h1t_block_size;// height 2 tree offset
     int block_direct = h2t_offset / h1t_block_size;
     int temp_len = len;
-    int temp_written_len = 0;
     int in_blk_len;
     int in_blk_offset = h2t_offset % h1t_block_size;
 
@@ -928,7 +926,9 @@ static int fs_write_3rd_level(size_t root_blk, int offset, int len, const char *
             FD_SET(blk_num, block_map);
             update_bitmap();
         }
-        temp_written_len = fs_write_2nd_level(h2t_blk[block_direct], )
+        fs_write_2nd_level(h2t_blk[block_direct], in_blk_offset + 6 * BLOCK_SIZE, in_blk_len, buf);
+        buf += in_blk_len;
+        written_length += in_blk_len;
     }
 
     return written_length;
