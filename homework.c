@@ -159,7 +159,6 @@ static int translate(const char *path) {
             }
 	    }
 	    if (found == 0) {
-            printf("DEBUG: returning not found ENOENT: %d\n", -ENOENT);
             return -ENOENT;
 	    }
         token = strtok(NULL, delim);
@@ -408,7 +407,7 @@ static int fs_mknod(const char *path, mode_t mode, dev_t dev)
     assert(strlen(tmp_name) < 28);
     memcpy(new_dirent.name, tmp_name, strlen(tmp_name));
 
-    struct fs5600_dirent *dir_blk = (struct fs5600_dirent *)malloc(BLOCK_SIZE);
+    struct fs5600_dirent *dir_blk = (struct fs5600_dirent *)calloc(BLOCK_SIZE / sizeof(int), sizeof(int));
     disk->ops->read(disk, (father_inode->direct)[0], 1, dir_blk);
     memcpy(&dir_blk[free_dirent_num], &new_dirent, sizeof(struct fs5600_dirent));
     // printf("DEBUG: before write, dir_blk name is: %s\n", dir_blk[free_dirent_num].name);
@@ -593,11 +592,14 @@ static int fs_truncate(const char *path, off_t len)
 	return -EINVAL;		/* invalid argument */
 
     int inum = translate(path);
-    if (inum == -ENOENT || inum == EISDIR) {
-        return inum;
+    if (inum == -ENOENT || inum == -ENOTDIR) {
+        return -ENOENT;
+    }
+    struct fs5600_inode *inode = &inode_region[inum];
+    if  (S_ISDIR(inode->mode)) {
+        return -EISDIR;
     }
 
-    struct fs5600_inode *inode = &inode_region[inum];
     // clear the block bit map of this inode
     int temp_blk_num;
     int i;
@@ -655,7 +657,44 @@ void truncate_3rd_level(int h2t_root_blk_num) {
  */
 static int fs_unlink(const char *path)
 {
-    return -EOPNOTSUPP;
+    int inum = translate(path);
+    if (inum == -ENOENT || inum == -ENOTDIR) {
+        return -ENOENT;
+    }
+    struct fs5600_inode *inode = &inode_region[inum];
+    if  (S_ISDIR(inode->mode)) {
+        return -EISDIR;
+    }
+    char *father_path;
+    trancate_path(path, &father_path);
+    int father_inum = translate(father_path);
+    free(father_path);
+    struct fs5600_inode *father_inode = &inode_region[father_inum];
+
+
+    // remove inode, i.e. clear inode_map corresponding bit
+    FD_CLR(inum, inode_map);
+    update_bitmap();
+
+    // remove entry from father dir
+    char *name = get_name(path);
+    struct fs5600_dirent *father_dir = malloc(FS_BLOCK_SIZE);
+    disk->ops->read(disk, father_inode->direct[0], 1, father_dir);
+    int i;
+    for (i = 0; i < 32; ++i) {
+        if (strcmp(father_dir[i].name, name)) {
+            father_dir[i].valid = 0;
+            break;
+        }
+    }
+
+    disk->ops->write(disk, father_inode->direct[0], 1, father_dir);
+    free(father_dir);
+    free(name);
+    if (i == 32) {
+        return -ENOENT;
+    }
+    return 0;
 }
 
 /* rmdir - remove a directory
