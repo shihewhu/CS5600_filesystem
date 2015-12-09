@@ -600,7 +600,8 @@ static int fs_truncate(const char *path, off_t len)
     struct fs5600_inode *inode = &inode_region[inum];
     // clear the block bit map of this inode
     int temp_blk_num;
-    for (int i = 0; i < 6; i++) {
+    int i;
+    for (i = 0; i < 6; i++) {
         temp_blk_num = inode->direct[i];
         if (temp_blk_num != 0) {
             FD_CLR(temp_blk_num, block_map);
@@ -627,7 +628,8 @@ static int fs_truncate(const char *path, off_t len)
 void truncate_2nd_level(int h1t_root_blk_num) {
     int h1t_blk[256];
     disk->ops->read(disk, h1t_root_blk_num, 1, h1t_blk);
-    for (int i = 0; i < 256; ++i) {
+    int i;
+    for (i = 0; i < 256; ++i) {
         int temp_blk_num = h1t_blk[i];
         if (temp_blk_num != 0) {
             FD_CLR(temp_blk_num, block_map);
@@ -641,7 +643,8 @@ void truncate_2nd_level(int h1t_root_blk_num) {
 void truncate_3rd_level(int h2t_root_blk_num) {
     int h2t_blk[256];
     disk->ops->read(disk, h2t_root_blk_num, 1, h2t_blk);
-    for (int i = 0; i < 256; ++i) {
+    int i;
+    for (i = 0; i < 256; ++i) {
         truncate_2nd_level(h2t_blk[i]);
     }
 }
