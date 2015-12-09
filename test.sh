@@ -34,37 +34,13 @@ put wang.1 wang.25
 put wang.1 wang.26
 put wang.1 wang.27
 put wang.1 wang.28
-get wang.0 /tmp/wang.0
-get wang.1 /tmp/wang.1
-get wang.2 /tmp/wang.2
-get wang.3 /tmp/wang.3
-get wang.4 /tmp/wang.4
-get wang.5 /tmp/wang.5
-get wang.6 /tmp/wang.6
-get wang.7 /tmp/wang.7
-get wang.8 /tmp/wang.8
-get wang.9 /tmp/wang.9
-get wang.10 /tmp/wang.10
-get wang.11 /tmp/wang.11
-get wang.12 /tmp/wang.12
-get wang.13 /tmp/wang.13
-get wang.14 /tmp/wang.14
-get wang.15 /tmp/wang.15
-get wang.16 /tmp/wang.16
-get wang.17 /tmp/wang.17
-get wang.18 /tmp/wang.18
-get wang.19 /tmp/wang.19
-get wang.20 /tmp/wang.20
-get wang.21 /tmp/wang.21
-get wang.22 /tmp/wang.22
-get wang.23 /tmp/wang.23
-get wang.24 /tmp/wang.24
-get wang.25 /tmp/wang.25
-get wang.26 /tmp/wang.26
-get wang.27 /tmp/wang.27
-get wang.28 /tmp/wang.28
+put wang.1 wang.29
 ls
-ls
-ls-l
 EOF
-
+# cp ./foo.img /tmp/foo1.img
+# ./homework -cmdline -image foo.img <<EOF
+# ls
+# ls
+# EOF
+# cp ./foo.img /tmp/foo2.img
+# diff /tmp/foo1.img /tmp/foo2.img

@@ -29,14 +29,18 @@
  *
  * NOTE - blkdev access is in terms of 1024-byte blocks
  */
+
 extern struct blkdev *disk;
-void print_with_length(const char * buf, int len) {
+/*
+ * debug print
+ */
+/*void print_with_length(const char * buf, int len) {
     int i = 0;
     for (; i < len; i++) {
         printf("%c", buf[i]);
     }
     printf("\n");
-}
+}*/
 /* by defining bitmaps as 'fd_set' pointers, you can use existing
  * macros to handle them. 
  *   FD_ISSET(##, inode_map);
@@ -193,17 +197,17 @@ int trancate_path (const char *path, char **trancated_path) {
     return 0;
 }
 
-static void set_attr(struct fs5600_inode *inode, struct stat *sb) {
+static void set_attr(struct fs5600_inode inode, struct stat *sb) {
     /* set every other bit to zero */
     memset(sb, 0, sizeof(struct stat));
-    sb->st_mode = inode->mode;
-    sb->st_uid = inode->uid;
-    sb->st_size = inode->size;
-    sb->st_blocks = 1 + ((inode->size - 1) / FS_BLOCK_SIZE);
+    sb->st_mode = inode.mode;
+    sb->st_uid = inode.uid;
+    sb->st_size = inode.size;
+    sb->st_blocks = 1 + ((inode.size - 1) / FS_BLOCK_SIZE);
     sb->st_nlink = 1;
-    sb->st_atime = inode->ctime;
-    sb->st_ctime = inode->ctime;
-    sb->st_mtime = inode->ctime;
+    sb->st_atime = inode.ctime;
+    sb->st_ctime = inode.ctime;
+    sb->st_mtime = inode.ctime;
 }
 
 /* getattr - get file or directory attributes. For a description of
@@ -223,7 +227,7 @@ static int fs_getattr(const char *path, struct stat *sb)
     	return -ENOENT;
     }
 
-    struct fs5600_inode *inode = &inode_region[inum];
+    struct fs5600_inode inode = inode_region[inum];
     set_attr(inode, sb);
     /* what should I return if succeeded?
      success (0) */
@@ -297,32 +301,47 @@ static int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
     disk->ops->read(disk, block_pos, 1, dir);
     printf("read into block\n");
     int curr_inum;
-    struct fs5600_inode *curr_inode;
-    char *name;
+    struct fs5600_inode curr_inode;
+
+//    int *crazy;
     struct stat sb;
 //            = malloc(sizeof(struct stat));
 
     int i;
     for (i = 0; i < 32; i++) {
-        printf("DEBUG: name: %s, valid: %d, isDir: %d, inum: %d\n",
-               dir[i].name, dir[i].valid, dir[i].isDir, dir[i].inode);
+//        printf("DEBUG: name: %s, valid: %d, isDir: %d, inum: %d\n",
+//               dir[i].name, dir[i].valid, dir[i].isDir, dir[i].inode);
     	if (dir[i].valid == 0) {
     	    continue;
     	}
+
 //        fs_init(NULL);
+//        inode = &inode_region[inum];
+//        // assert is dir
+//        assert(S_ISDIR(inode->mode));
+//        int block_pos = inode->direct[0];
+//        disk->ops->read(disk, block_pos, 1, dir);
+
+
     	curr_inum = dir[i].inode;
         printf("curr inum is : %d\n", curr_inum);
 //    	update_inode(curr_inum);
-        curr_inode = &inode_region[curr_inum];
+        curr_inode = inode_region[curr_inum];
 
-    	name = dir[i].name;
+//
 //        printf("current inode info is:\n mode: %d, uid: %d, size: %d, ctime: %d\n",
 //                                            curr_inode->mode, curr_inode->uid, curr_inode->size, curr_inode->ctime);
-        printf("current inode name is: %s\n", name);
+        printf("current inode name is: %s\n", dir[i].name);
     	set_attr(curr_inode, &sb);
         printf("before calling filler\n");
 //        sleep(1);
-    	filler(NULL, name, &sb, 0);
+//    	filler(NULL, dir[i].name, &sb, 0);
+//        char *name = NULL;
+//        strcpy(name, dir[i].name);
+//        printf("DEBUG: the name is %s\n", name);
+    	filler(NULL, dir[i].name, &sb, 0);
+//        crazy = malloc(1024000);
+//        crazy[0] = 0;
     }
     printf("before freeing sb\n");
 //    free(sb);
@@ -335,7 +354,7 @@ int find_free_dirent_num(struct fs5600_inode *inode);
 int find_free_inode_map_bit();
 
 static char *get_name(char *path);
-static char *strip(char *path);
+static void strip(char *path);
 
 void update_inode(int inum);
 
@@ -505,7 +524,7 @@ static int fs_mkdir(const char *path, mode_t mode)
     // printf("DEBUG: entering fs_mkdir\n");
     // printf("DEBUG: path is %s\n", path);
     // check permission, !S_ISREG(mode)
-
+    mode = mode | S_IFDIR;
     if (!S_ISDIR(mode)) {
     	// printf("DEBUG: mode is %d\n", (int)mode);
         return -EINVAL;
@@ -733,7 +752,71 @@ static int fs_unlink(const char *path)
  */
 static int fs_rmdir(const char *path)
 {
-    return -EOPNOTSUPP;
+    // check dir is dir
+    int inum = translate(path);
+    if (inum == -ENOENT || inum == -ENOTDIR) {
+        return -ENOENT;
+    }
+    struct fs5600_inode *inode = &inode_region[inum];
+    if  (S_ISREG(inode->mode)) {
+        return -ENOTDIR;
+    }
+
+    // check not root dir
+    char *father_path;
+    int succeed = trancate_path(path, &father_path);
+    if (!succeed) {
+        printf("Attempting to delete root directory");
+        assert(0);
+    }
+
+    // check dir is empty
+    struct fs5600_dirent *dirent = malloc(FS_BLOCK_SIZE);
+    disk->ops->read(disk, inode->direct[0], 1, dirent);
+    int empty = 1;
+    int i;
+    for (i = 0; i < 32; ++i) {
+        if (dirent[i].valid) {
+            empty = 0;
+            break;
+        }
+    }
+    free(dirent);
+    if (!empty) {
+        return -ENOTEMPTY;
+    }
+
+    // block map remove the block of this dir
+    FD_SET(inode->direct[0], inode_map);
+    update_bitmap();
+
+    // inode map remove this dir
+    FD_SET(inum, inode_map);
+    update_bitmap();
+
+    // then unlink this dir
+    char *_path = strdup(path);
+    strip(_path);
+    char *name = get_name(_path);
+    printf("DEBUG: name is %s\n", name);
+    int father_inum = translate(father_path);
+    free(father_path);
+    struct fs5600_inode *father_inode = &inode_region[father_inum];
+    struct fs5600_dirent *father_dirent = malloc(FS_BLOCK_SIZE);
+    disk->ops->read(disk, father_inode->direct[0], 1, father_dirent);
+    for (i = 0; i < 32; ++i) {
+        printf("DEBUG: %dth name is %s\n", i, father_dirent[i].name);
+        if (strcmp(father_dirent[i].name, name) == 0) {
+            printf("DEBUG: father dir order is: %d\n", i);
+            if (father_dirent[i].valid == 1 ) {
+                father_dirent[i].valid = 0;
+            }
+        }
+    }
+    disk->ops->write(disk, father_inode->direct[0], 1, father_dirent);
+
+    free(_path);
+    return -0;
 }
 
 /* rename - rename a file or directory
