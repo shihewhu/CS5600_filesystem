@@ -171,7 +171,7 @@ static int translate(const char *path) {
 //    printf("DEBUG: inum inside translation: %d\n", inode_num);
     return inode_num;
 }
-
+int trancate_path (const char *path, char **trancated_path);
 /* trancate the last token from path
  * return 1 if succeed, 0 if not*/
 int trancate_path (const char *path, char **trancated_path) {
@@ -680,9 +680,69 @@ static int fs_rmdir(const char *path)
  * particular, the full version can move across directories, replace a
  * destination file, and replace an empty directory with a full one.
  */
+
+ /*TODO: has bug*/
 static int fs_rename(const char *src_path, const char *dst_path)
-{
-    return -EOPNOTSUPP;
+{	
+	/*check exists of src file and dst file*/
+	int src_inum, dst_inum;
+	printf("DEBUG: src_path is %s\n", src_path);
+	printf("DEBUG: dst_path is %s\n", dst_path);
+	src_inum = translate(src_path);
+	dst_inum = translate(dst_path);
+	printf("DEBUG: src_inum is %d\n", src_inum);
+	printf("DEBUG: dst_inum is %d\n", dst_inum);
+   	if (src_inum < 0)  {
+   		return -ENOENT;
+   	}
+   	if (dst_inum > 0) {
+   		return -EEXIST;
+   	} 
+   	/*check exists of father dir*/
+   	char *src_father_path;
+   	char *dst_father_path;
+   	if (!trancate_path(src_path, &src_father_path) || !trancate_path(dst_path, &dst_father_path)) {
+   		return -ENOENT;
+   	}
+   	if (strcmp(src_father_path, dst_father_path) != 0) {
+   		return -EINVAL;
+   	}
+   	int father_inum;
+   	if (!(father_inum = translate(src_father_path))) {
+   		return father_inum;
+   	}
+   	/*get the name of the src and dst path*/
+   	char *_src_path = strdup(src_path);
+   	char *src_name = get_name(_src_path);
+   	free(_src_path);
+   	char *_dst_path = strdup(dst_path);
+   	char *dst_name = get_name(_dst_path);
+   	free(_dst_path);
+   	/*load dirent block to memory to search src file name*/
+   	struct fs5600_inode *inode;
+    struct fs5600_dirent *dir;
+    dir = malloc(FS_BLOCK_SIZE);
+    
+    inode = &inode_region[father_inum];
+    // assert is dir
+    assert(S_ISDIR(inode->mode));
+    int block_pos = inode->direct[0];
+    disk->ops->read(disk, block_pos, 1, dir);
+    int i;
+    int result = -ENOENT;
+    for (i = 0;i < 32; i++) {
+    	if (strcmp(dir[i].name, src_name)) {
+    		strncpy(dir[i].name, dst_name, strlen(dst_name));
+    		dir[i].name[strlen(dst_name)] = '\0';
+    		disk->ops->write(disk, block_pos, 1, dir);
+    		result = 1;
+    	}
+    }
+    free(dst_name);
+    free(src_name);
+   	free(src_father_path);
+   	free(dst_father_path);
+    return -result;
 }
 
 /* chmod - change file permissions
