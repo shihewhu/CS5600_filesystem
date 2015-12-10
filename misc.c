@@ -120,7 +120,7 @@ int do_pwd(char *argv[])
     return 0;
 }
 
-char lsbuf[32][64];
+char lsbuf[16][64];
 int  lsi;
 
 void init_ls(void)
@@ -277,11 +277,8 @@ int do_get(char *argv[])
     sprintf(path, "%s/%s", cwd, inside);
     fix_path(path);
     while ((len = fs_ops.read(path, blkbuf, blksiz, offset, NULL)) > 0) {
-	if ((val = write(fd, blkbuf, len)) != len) {
-        printf("the len is: %d\n", len);
-        printf("breaking\n");
-        break;
-    }
+	if ((val = write(fd, blkbuf, len)) != len)
+	    break;
 	offset += len;
     }
     close(fd);
