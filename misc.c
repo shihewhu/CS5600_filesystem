@@ -120,7 +120,7 @@ int do_pwd(char *argv[])
     return 0;
 }
 
-char lsbuf[16][64];
+char lsbuf[32][64];
 int  lsi;
 
 void init_ls(void)

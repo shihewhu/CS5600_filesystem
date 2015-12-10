@@ -261,7 +261,7 @@ int inode_is_dir(int father_inum, int inum) {
  *
  * for each entry in the directory, invoke the 'filler' function,
  * which is passed as a function pointer, as follows:
- *     filler(buf, <name>, <statbuf>, 0)
+ *     filler(ptr, <name>, <statbuf>, 0)
  * where <statbuf> is a struct stat, just like in getattr.
  *
  * Errors - path resolution, ENOTDIR, ENOENT
@@ -339,7 +339,7 @@ static int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
 //        char *name = NULL;
 //        strcpy(name, dir[i].name);
 //        printf("DEBUG: the name is %s\n", name);
-    	filler(NULL, dir[i].name, &sb, 0);
+    	filler(ptr, dir[i].name, &sb, 0);
 //        crazy = malloc(1024000);
 //        crazy[0] = 0;
     }
@@ -443,7 +443,8 @@ static int fs_mknod(const char *path, mode_t mode, dev_t dev)
             .name = "",
     };
     assert(strlen(tmp_name) < 28);
-    memcpy(new_dirent.name, tmp_name, strlen(tmp_name));
+    strncpy(new_dirent.name, tmp_name, strlen(tmp_name));
+    new_dirent.name[strlen(tmp_name)] = '\0';
 
     struct fs5600_dirent *dir_blk = (struct fs5600_dirent *)calloc(BLOCK_SIZE / sizeof(int), sizeof(int));
     disk->ops->read(disk, (father_inode->direct)[0], 1, dir_blk);
@@ -919,16 +920,9 @@ static int fs_chmod(const char *path, mode_t mode)
     	return inum;
     }
     struct fs5600_inode *inode;
-    // struct fs5600_dirent *dir;
-    // dir = malloc(FS_BLOCK_SIZE);
-    
     inode = &inode_region[inum];
-    // assert is dir
-    // assert(S_ISREG(inode->mode));
-    // int block_pos = inode->direct[0];
     inode->mode = mode;
     update_inode(inum);
-    // disk->ops->read(disk, block_pos, 1, dir);
     return 0;
 }
 
@@ -945,20 +939,17 @@ int fs_utime(const char *path, struct utimbuf *ut)
     	return inum;
     }
     struct fs5600_inode *inode;
-    // struct fs5600_dirent *dir;
-    // dir = malloc(FS_BLOCK_SIZE);
-    
     inode = &inode_region[inum];
-    // assert is dir
-    // assert(S_ISREG(inode->mode));
-    // int block_pos = inode->direct[0];
     inode->mtime = ut->modtime;
     update_inode(inum);
     return -EOPNOTSUPP;
 }
 
 
-// given block number, offset, length and return buffer, load corresponding data into buffer
+/*
+ * given block number, offset, length and return buffer, load corresponding data into buffer
+ *
+ */
 static int fs_read_block(int blknum, int offset, int len, char *buf);
 //static int fs_read_file_by_inode();
 
@@ -978,14 +969,13 @@ static int fs_read_3rd_level(size_t root_blk, int offset, int len, char *buf);
 static int fs_read(const char *path, char *buf, size_t len, off_t offset,
                    struct fuse_file_info *fi)
 {
-    // first get the inode
-    // check it is valid
-    // check it is file
+    /*first get the inode
+    check it is valid
+    check it is file*/
 
     int inum = translate(path);
     const struct fs5600_inode *inode = &inode_region[inum];
-    // assert path is a file
-    assert(S_ISREG(inode->mode));
+    assert(S_ISREG(inode->mode));// assert path is a file
     int size = inode->size;
     if (offset >= size) {
         return 0;
@@ -994,8 +984,6 @@ static int fs_read(const char *path, char *buf, size_t len, off_t offset,
         len = size - offset;
     }
     int tmp_len = len;
-
-
     if (offset < 6 * BLOCK_SIZE) {
         int read_len = fs_read_1st_level(inode, offset, tmp_len, buf);
         offset += read_len;
@@ -1011,7 +999,6 @@ static int fs_read(const char *path, char *buf, size_t len, off_t offset,
     if (offset >= BLOCK_SIZE / 4 * BLOCK_SIZE + 6 * BLOCK_SIZE && offset <= (BLOCK_SIZE / 4) * (BLOCK_SIZE / 4) * BLOCK_SIZE) {
         fs_read_3rd_level(inode->indir_2, offset, tmp_len, buf);
     }
-
     return len;
 }
 /*
@@ -1023,7 +1010,6 @@ static int fs_read_1st_level(const struct fs5600_inode *inode, off_t offset, siz
     int temp_len = len;
     int in_blk_len;
     int in_blk_offset = offset % BLOCK_SIZE;
-
     for (; block_direct < 6 && temp_len > 0; in_blk_offset = 0, block_direct++) {
         if (temp_len + in_blk_offset > BLOCK_SIZE) {
             in_blk_len = BLOCK_SIZE - in_blk_offset;
@@ -1041,15 +1027,11 @@ static int fs_read_1st_level(const struct fs5600_inode *inode, off_t offset, siz
 
 static int fs_read_2nd_level(size_t root_blk, int offset, int len, char *buf){
     int read_length = 0;
-
-    
     int h1t_offset = offset - 6 * BLOCK_SIZE; // height 1 tree offset
     int block_direct = h1t_offset / BLOCK_SIZE;
     int temp_len = len;
     int in_blk_len;
     int in_blk_offset = h1t_offset % BLOCK_SIZE;
-
-
     int h1t_blk[256];
     disk->ops->read(disk, root_blk, 1, h1t_blk);
 
@@ -1124,16 +1106,12 @@ static int fs_write_3rd_level(size_t root_blk, int offset, int len, const char *
 static int fs_write(const char *path, const char *buf, size_t len,
                     off_t offset, struct fuse_file_info *fi)
 {
-    // assert(0);
-
     int inum;
-    if (!(inum = translate(path))) {
-        // here checked path resolution
+    if (!(inum = translate(path))) { // here checked path resolution
         return inum;
     }
     struct fs5600_inode *inode = &inode_region[inum];
-    // check tmp_offset is no larger than file size
-    if (offset > inode->size) {
+    if (offset > inode->size) {// check tmp_offset is no larger than file size
         return -EINVAL;
     }
     int tmp_offset = offset;
@@ -1146,18 +1124,18 @@ static int fs_write(const char *path, const char *buf, size_t len,
         buf += written_len;
     }
     if (tmp_offset >= 6 * BLOCK_SIZE && tmp_offset < BLOCK_SIZE / 4 * BLOCK_SIZE + 6 * BLOCK_SIZE) {
-        // if indir_1 not set, set it
-        if (inode->indir_1 == 0) {
+
+        if (inode->indir_1 == 0) {// if indir_1 not set, set it
             // find a free block
             int blk_num = find_free_block_number();
             if (blk_num < 0) {
                 assert(blk_num > 0);
                 return -ENOSPC;
             }
-            // change the inode
+            /*change the inode*/
             inode->indir_1 = blk_num;
             update_inode(inum);
-            // set the block bitmap
+            /*set the block bitmap*/
             FD_SET(blk_num, block_map);
             update_bitmap();
         }
@@ -1167,29 +1145,23 @@ static int fs_write(const char *path, const char *buf, size_t len,
         buf += written_len;
     }
     if (tmp_offset >= BLOCK_SIZE / 4 * BLOCK_SIZE + 6 * BLOCK_SIZE && tmp_offset <= (BLOCK_SIZE / 4) * (BLOCK_SIZE / 4) * BLOCK_SIZE) {
-        // if indir_2 not set, set it
-        if (inode->indir_2 == 0) {
+        if (inode->indir_2 == 0) { // if indir_2 not set, set it
             // find a free block
             int blk_num = find_free_block_number();
             if (blk_num < 0) {
                 assert(blk_num > 0);
                 return -ENOSPC;
             }
-            // change the inode
+            /*change the inode*/
             inode->indir_2 = blk_num;
             update_inode(inum);
-            // set the block bitmap
+            /*set the block bitmap*/
             FD_SET(blk_num, block_map);
             update_bitmap();
         }
         fs_write_3rd_level(inode->indir_2, tmp_offset, tmp_len, buf);
-
     }
-    
-
-
-    // update inode size
-//    printf("updated size of inode is: %d\n", (int) (offset + len));
+    /* update inode size */
     if (offset + len > inode->size) {
         inode->size = offset + len;
         update_inode(inum);
@@ -1262,20 +1234,17 @@ static int fs_write_2nd_level(size_t root_blk, int offset, int len, const char *
             in_blk_len = temp_len;
             temp_len = 0;
         }
-        // if h1t_blk block direct is not used, allocate a block
-        if (h1t_blk[block_direct] == 0) {
-            // find a free block
+        if (h1t_blk[block_direct] == 0) { // if h1t_blk block direct is not used, allocate a block
+            /*find a free block*/
             int blk_num = find_free_block_number();
             if (blk_num < 0) {
                 assert(blk_num > 0);
                 return -ENOSPC;
             }
-
-            // change the h1t block and write back
+            /*change the h1t block and write back*/
             h1t_blk[block_direct] = blk_num;
             disk->ops->write(disk, root_blk, 1, h1t_blk);
-
-            // set the block bitmap
+            /*set the block bitmap*/
             FD_SET(blk_num, block_map);
             update_bitmap();
         }

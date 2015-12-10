@@ -5,36 +5,36 @@ sleep 0.1
 make clean
 make
 ./homework -cmdline -image foo.img <<EOF
-put wang.1 wang.0
-put wang.1 wang.1
-put wang.1 wang.2
-put wang.1 wang.3
-put wang.1 wang.4
-put wang.1 wang.5
-put wang.1 wang.6
-put wang.1 wang.7
-put wang.1 wang.8
-put wang.1 wang.9
-put wang.1 wang.10
-put wang.1 wang.11
-put wang.1 wang.12
-put wang.1 wang.13
-put wang.1 wang.14
-put wang.1 wang.15
-put wang.1 wang.16
-put wang.1 wang.17
-put wang.1 wang.18
-put wang.1 wang.19
-put wang.1 wang.20
-put wang.1 wang.21
-put wang.1 wang.22
-put wang.1 wang.23
-put wang.1 wang.24
-put wang.1 wang.25
-put wang.1 wang.26
-put wang.1 wang.27
-put wang.1 wang.28
-put wang.1 wang.29
+put wang.1 shi.0
+put wang.1 shi.1
+put wang.1 shi.2
+put wang.1 shi.3
+put wang.1 shi.4
+put wang.1 shi.5
+put wang.1 shi.6
+put wang.1 shi.7
+put wang.1 shi.8
+put wang.1 shi.9
+put wang.1 shi.10
+put wang.1 shi.11
+put wang.1 shi.12
+put wang.1 shi.13
+put wang.1 shi.14
+put wang.1 shi.15
+put wang.1 shi.16
+put wang.1 shi.17
+put wang.1 shi.18
+put wang.1 shi.19
+put wang.1 shi.20
+put wang.1 shi.21
+put wang.1 shi.22
+put wang.1 shi.23
+put wang.1 shi.24
+put wang.1 shi.25
+put wang.1 shi.26
+put wang.1 shi.27
+put wang.1 shi.28
+put wang.1 shi.29
 ls
 EOF
 # cp ./foo.img /tmp/foo1.img
