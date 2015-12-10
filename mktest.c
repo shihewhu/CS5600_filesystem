@@ -189,7 +189,7 @@ int main(int argc, char **argv)
     
     memset(f5_data, 'K', 269*1024+721);
 
-    for (i = 0; i <= inum; i++)
+    for (i = 0; i < inum; i++)
         FD_SET(i, inode_map);
     for (i = 0; i < (ptr - (void*)disk)/FS_BLOCK_SIZE; i++)
         FD_SET(i, block_map);
