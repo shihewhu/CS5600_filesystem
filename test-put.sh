@@ -22,41 +22,55 @@ function create_file {
 		echo "" > $2
 	fi
 	for i in $(seq 1 $1) ; do
-		echo "BITSIGHT1FACEBOOK3GOOGLE2" >> $2
+		random_number=$(( ( RANDOM % 1000 )  + 1 ))
+		echo $random_number >> $2
 	done
 }
 
-len=200
+len=2000
 count=1
-while [ $len -le 4000 ]
+while [ $len -le 140000 ]
 do
 	#statements
 	create_file $len "put-test-file.$count"
-	len=$((len + 200))
+	len=$((len + 2000))
 	count=$((count + 1))
 done
 
+count=$((count - 1))
 echo "starting test"
 
 for i in `seq 1 $count`; do
-	
-	file-to-be-tested="put-test-file.$i"
-	output-path="/tmp/$file-to-be-tested"
-	cksum=$(cksum file-to-be-tested)
-	./homework -cmdline -image foo.img << EOF
-	put $file-to-be-tested
-	get $file-to-be-tested $output-path
+	testing_file="put-test-file.$i"
+	output_file="/tmp/$testing_file"
+	cksum1=$(cksum $testing_file)
+	./mktest test.img
+	./homework -cmdline -image test.img << EOF
+	put $testing_file
+	get $testing_file $output_file
 	quit
-	EOF
-	cksum2=$(cksum $output-path)
-	if [[ cksum1 == cksum2 ]]; then
+EOF
+	cksum2=$(cksum $output_file)
+	IFS=' ' read -r -a cksum1 <<< "$cksum1"
+	IFS=' ' read -r -a cksum2 <<< "$cksum2"
+	ls -l put-test-file.$i
+	if [[ "${cksum1[0]}" == "${cksum2[0]}" ]]; then
 		echo "test case $i passed"
 	else
 		echo "test case $i failed"
+		echo $cksum1
+		echo $cksum2
+
 	fi
 done;
 
+# cat put-test-file.1
 rm put-test-file.*
+rm /tmp/put-test-file.*
+
+echo "stress test"
+
+
 
 
 
