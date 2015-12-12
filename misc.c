@@ -65,6 +65,7 @@ static int split(char *p, char **args, int n, char *delim)
     return ap-args;
 }
 
+
 static char cwd[128];
 static char paths[16][44];
 static int  depth = 0;
@@ -120,7 +121,9 @@ int do_pwd(char *argv[])
     return 0;
 }
 
-char lsbuf[16][64];
+#define DIRENTS_PER_BLOCK (FS_BLOCK_SIZE / sizeof(struct fs5600_dirent))
+
+char lsbuf[DIRENTS_PER_BLOCK][64];
 int  lsi;
 
 void init_ls(void)
@@ -269,23 +272,23 @@ int do_get(char *argv[])
 {
     char *inside = argv[0], *outside = argv[1];
     char path[128];
-    int len, fd, offset = 0, val = 0;
+    int len, fd, offset = 0;
 
     if ((fd = open(outside, O_WRONLY|O_CREAT|O_TRUNC, 0777)) < 0)
 	return fd;
 
     sprintf(path, "%s/%s", cwd, inside);
     fix_path(path);
-    while ((len = fs_ops.read(path, blkbuf, blksiz, offset, NULL)) > 0) {
-	if ((val = write(fd, blkbuf, len)) != len) {
-        printf("the len is: %d\n", len);
-        printf("breaking\n");
-        break;
-    }
+    while (1) {
+        len = fs_ops.read(path, blkbuf, blksiz, offset, NULL);
+	if (len > 0)
+	    len = write(fd, blkbuf, len);
+        if (len <= 0)
+	    break;
 	offset += len;
     }
     close(fd);
-    return (val >= 0) ? 0 : val;
+    return (len >= 0) ? 0 : len;
 }
 
 int do_get1(char *argv[])
