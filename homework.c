@@ -42,7 +42,6 @@ fd_set *inode_map;              /* = malloc(sb.inode_map_size * FS_BLOCK_SIZE); 
 fd_set *block_map;
 int inode_map_sz;
 int block_map_sz;
-int inode_region_sz;
 struct fs5600_inode *inode_region;	/* inodes in memory */
 void update_bitmap(void);
 
