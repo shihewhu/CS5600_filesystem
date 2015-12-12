@@ -23,26 +23,17 @@
 #include "fs5600.h"
 #include "blkdev.h"
 
-/* 
+/*
  * disk access - the global variable 'disk' points to a blkdev
- * structure which has been initialized to access the image file.
  *
+ * structure which has been initialized to access the image file.
  * NOTE - blkdev access is in terms of 1024-byte blocks
  */
 
 extern struct blkdev *disk;
-/*
- * debug print
- */
-/*void print_with_length(const char * buf, int len) {
-    int i = 0;
-    for (; i < len; i++) {
-        printf("%c", buf[i]);
-    }
-    printf("\n");
-}*/
+
 /* by defining bitmaps as 'fd_set' pointers, you can use existing
- * macros to handle them. 
+ * macros to handle them.
  *   FD_ISSET(##, inode_map);
  *   FD_CLR(##, block_map);
  *   FD_SET(##, block_map);
@@ -73,7 +64,7 @@ void* fs_init(struct fuse_conn_info *conn)
     disk->ops->read(disk, 1, sb.inode_map_sz, inode_map);
     inode_map_sz = sb.inode_map_sz;
     printf("DEBUG: inode map size is: %d\n", sb.inode_map_sz);
-    
+
     block_map = malloc(sb.block_map_sz * FS_BLOCK_SIZE);
     disk->ops->read(disk, sb.inode_map_sz + 1, sb.block_map_sz, block_map);
     block_map_sz = sb.block_map_sz;
@@ -465,7 +456,7 @@ void update_inode(int inum) {
 
 static void strip(char *path) {
 	if (path[strlen(path) - 1] == '/') {
-		path[strlen(path) - 1] = '\0'; 
+		path[strlen(path) - 1] = '\0';
 	}
 }
 static char *get_name(char *path) {
@@ -514,12 +505,12 @@ int find_free_dirent_num(struct fs5600_inode *inode) {
 int find_free_block_number();
 /* mkdir - create a directory with the given mode.
  * Errors - path resolution, EEXIST
- * Conditions for EEXIST are the same as for create. 
+ * Conditions for EEXIST are the same as for create.
  * If this would result in >32 entries in a directory, return -ENOSPC
  *
  * Note that you may want to combine the logic of fs_mknod and
- * fs_mkdir. 
- */ 
+ * fs_mkdir.
+ */
 static int fs_mkdir(const char *path, mode_t mode)
 {
     // printf("DEBUG: entering fs_mkdir\n");
@@ -575,7 +566,7 @@ static int fs_mkdir(const char *path, mode_t mode)
     update_bitmap();
     new_inode.direct[0] = free_blk_num;
     int *clear_block = (int *)calloc(BLOCK_SIZE, sizeof(int));
-    disk->ops->write(disk, new_inode.direct[0], 1, clear_block); 
+    disk->ops->write(disk, new_inode.direct[0], 1, clear_block);
     // printf("DEBUG: before find free father_inode map\n");
     int free_inum = find_free_inode_map_bit();
     // printf("DEBUG: after find free father_inode map\n");
@@ -630,7 +621,7 @@ static int fs_truncate(const char *path, off_t len)
 {
     /* We'll cheat by only implementing this for the case of len==0,
      * and an error otherwise, as 99.99% of the time that's how
-     * truncate is used.  
+     * truncate is used.
      */
     if (len != 0)
 	return -EINVAL;		/* invalid argument */
@@ -723,7 +714,7 @@ static int fs_unlink(const char *path)
     // remove entry from father dir
     char *_path = strdup(path);
     char *name = get_name(_path);
-    
+
     struct fs5600_dirent *father_dir = malloc(FS_BLOCK_SIZE);
     disk->ops->read(disk, father_inode->direct[0], 1, father_dir);
     int found = 0;
@@ -749,7 +740,7 @@ static int fs_unlink(const char *path)
 /* rmdir - remove a directory
  *  Errors - path resolution, ENOENT, ENOTDIR, ENOTEMPTY
  * Remember that you have to check to make sure that the directory is
- * empty 
+ * empty
  */
 static int fs_rmdir(const char *path)
 {
@@ -835,7 +826,7 @@ static int fs_rmdir(const char *path)
 
  /*TODO: finished: compile succeeds, simple test passed, need more test*/
 static int fs_rename(const char *src_path, const char *dst_path)
-{	
+{
 	/*check exists of src file and dst file*/
 	int src_inum, dst_inum;
 	// printf("DEBUG: src_path is %s\n", src_path);
@@ -849,7 +840,7 @@ static int fs_rename(const char *src_path, const char *dst_path)
    	}
    	if (dst_inum > 0) {
    		return -EEXIST;
-   	} 
+   	}
    	/*check exists of father dir*/
    	char *src_father_path;
    	char *dst_father_path;
@@ -870,12 +861,12 @@ static int fs_rename(const char *src_path, const char *dst_path)
    	// printf("DEBUG: src_name is %s\n", src_name);
    	char *_dst_path = strdup(dst_path);
    	char *dst_name = get_name(_dst_path);
-   	
+
    	/*load dirent block to memory to search src file name*/
    	struct fs5600_inode *inode;
     struct fs5600_dirent *dir;
     dir = malloc(FS_BLOCK_SIZE);
-    
+
     inode = &inode_region[father_inum];
     // assert is dir
     assert(S_ISDIR(inode->mode));
@@ -1100,7 +1091,7 @@ static int fs_write_3rd_level(size_t root_blk, int offset, int len, const char *
  * error.
  * Errors - path resolution, ENOENT, EISDIR
  *  return EINVAL if 'offset' is greater than current file length.
- *  (POSIX semantics support the creation of files with "holes" in them, 
+ *  (POSIX semantics support the creation of files with "holes" in them,
  *   but we don't)
  */
 static int fs_write(const char *path, const char *buf, size_t len,
@@ -1344,7 +1335,7 @@ static int fs_statfs(const char *path, struct statvfs *st)
      *  f_blocks - total blocks in file system
      *  f_bfree, f_bavail - unused blocks
      * You could calculate bfree dynamically by scanning the block
-     * allocation map. 
+     * allocation map.
      */
     st->f_bsize = FS_BLOCK_SIZE;
     st->f_blocks = 0;
