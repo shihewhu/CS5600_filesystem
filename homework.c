@@ -42,6 +42,7 @@ fd_set *inode_map;              /* = malloc(sb.inode_map_size * FS_BLOCK_SIZE); 
 fd_set *block_map;
 int inode_map_sz;
 int block_map_sz;
+int num_of_blocks;
 struct fs5600_inode *inode_region;	/* inodes in memory */
 void update_bitmap(void);
 
@@ -77,6 +78,8 @@ void* fs_init(struct fuse_conn_info *conn)
     inode_region = malloc(sb.inode_region_sz * FS_BLOCK_SIZE);
     int inode_region_pos = 1 + sb.inode_map_sz + sb.block_map_sz;
     disk->ops->read(disk, inode_region_pos, sb.inode_region_sz, inode_region);
+
+    num_of_blocks = sb.num_blocks;
 
     return NULL;
 }
@@ -634,6 +637,13 @@ static int fs_unlink(const char *path)
     if  (S_ISDIR(inode->mode)) {
         return -EISDIR;
     }
+
+    // truncate all the data
+    int truncate_result = fs_truncate(path, 0);
+    if (truncate_result != 0) {
+        return truncate_result;
+    }
+
     char *father_path;
     trancate_path(path, &father_path);
     int father_inum = translate(father_path);
@@ -1120,9 +1130,11 @@ static int fs_write_1st_level(int inum, off_t offset, size_t len, const char *bu
         disk->ops->read(disk, inode->direct[block_direct], 1, blk);
         memcpy(blk + in_blk_offset, buf, in_blk_len);
         disk->ops->write(disk, inode->direct[block_direct], 1, blk);
+        free(blk);
         buf += in_blk_len;
         written_length += in_blk_len;
     }
+
     return written_length;
 }
 
@@ -1223,11 +1235,15 @@ void update_bitmap() {
 
 int find_free_block_number() {
     int i;
-    for (i = 0; i < block_map_sz * BLOCK_SIZE * 8; i++) {
-                if (!FD_ISSET(i, block_map)) {
-                    return i;
-                }
-            }
+    for (i = 0; i < block_map_sz * BLOCK_SIZE * 8 && i < num_of_blocks; i++) {
+        if (!FD_ISSET(i, block_map)) {
+            int *clear_blk = calloc(1, BLOCK_SIZE);
+            disk->ops->write(disk, i, 1, clear_blk);
+            free(clear_blk);
+            return i;
+        }
+    }
+
     return -ENOSPC;
 }
 
