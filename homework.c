@@ -138,7 +138,6 @@ static int translate(const char *path) {
             break;
 	    }
 	    if (current_dir->isDir == 0) {
-	        token = strtok(NULL, delim);
 	        if (token != NULL) {
                 error = -ENOTDIR;
             }
@@ -219,7 +218,7 @@ static int fs_getattr(const char *path, struct stat *sb)
 {
     fs_init(NULL);
     int inum = translate(path);
-    if (inum == -ENOENT) {
+    if (inum == -ENOENT || inum == -ENOTDIR) {
     	return -ENOENT;
     }
 
