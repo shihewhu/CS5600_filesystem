@@ -1,83 +1,78 @@
-#!/bin/bash
-
-
-# helper function
-function create_file {
-	len=$1
-	for i in `seq 1 $len`; 
-	do
-		#statements
-		echo "ABCDEFGHIJKLMNOPQRSTUVWXYZ" >> $2
-	done
-}
-
-
-
-function check_result {
-	diff_value=$(diff file.$1 /tmp/file.$1)
-	if [[ $diff_value == "" ]]; then
-		echo "test case $1 passed"
-	else 
-		echo "test case $1 failed, the difference is"
-		echo "$diff_value"
-	fi
-}
-
-function check_environment {
-	echo "check exist of file.$1"
-	if [[ -f "file.$1" ]]; then
-		#statements
-		rm file.$1
-	fi
-}
+#!/usr/bin/env bash
 
 # get args
 
-echo "cleaning files and compiling"
+echo "cleaning files"
 if [[ -f "test.img" ]]; then
 	#statements
 	rm test.img
 fi
-
-for i in `seq 1 3`; do
-	#statements
-	check_environment $i
-done
-
+echo "making image for test"
 ./mktest test.img
+
+echo "compiling"
 make clean
 make
 
-echo "test 1: direct write and read"
-create_file 100 file.1
+echo "making test files"
+#helper function
+function create_file {
+	if [[ -f $2 ]]; then
+		#clean file
+		echo "" > $2
+	fi
+	for i in $(seq 1 $1) ; do
+		random_number=$(( ( RANDOM % 1000 )  + 1 ))
+		echo $random_number >> $2
+	done
+}
+
+len=2000
+count=1
+while [ $len -le 140000 ]
+do
+	#statements
+	create_file $len "put-test-file.$count"
+	len=$((len + 2000))
+	count=$((count + 1))
+done
+
+count=$((count - 1))
 echo "starting test"
-./homework -cmdline -image test.img << EOF > /tmp/test-put-output-1
-put file.1
-get file.1 /tmp/file.1
-quit
+
+for i in `seq 1 $count`; do
+	testing_file="put-test-file.$i"
+	output_file="/tmp/$testing_file"
+	cksum1=$(cksum $testing_file)
+	./mktest test.img
+	./homework -cmdline -image test.img << EOF
+	put $testing_file
+	get $testing_file $output_file
+	quit
 EOF
+	cksum2=$(cksum $output_file)
+	IFS=' ' read -r -a cksum1 <<< "$cksum1"
+	IFS=' ' read -r -a cksum2 <<< "$cksum2"
+	ls -l put-test-file.$i
+	if [[ "${cksum1[0]}" == "${cksum2[0]}" ]]; then
+		echo "test case $i passed"
+	else
+		echo "test case $i failed"
+		echo $cksum1
+		echo $cksum2
 
-check_result $diff_value1 1
+	fi
+done;
 
-# echo "test case 2: height 1 tree write and read"
-# create_file 1000 file.2
-# echo "starting test"
-# ./homework -cmdline -image test.img << EOF > /tmp/test-put-output-2
-# put file.2
-# get file.2 /tmp/file.2
-# quit
-# EOF
-# diff_value2=$(diff file.2 /tmp/file.2)
-# check_result $diff_value2 2
+# cat put-test-file.1
+rm put-test-file.*
+rm /tmp/put-test-file.*
 
-# echo "test case 3: height 2 tree write and read"
-# create_file 10000 file.3
-# echo "starting test"
-# ./homework -cmdline -image test.img << EOF > /tmp/test-put-output-3
-# put file.3
-# get file.3 /tmp/file.3
-# quit
-# EOF
-# diff_value3=$(diff file.3 /tmp/file.3)
-# check_result $diff_value3 3
+echo "stress test"
+
+
+
+
+
+
 
