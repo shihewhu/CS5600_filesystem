@@ -479,9 +479,11 @@ static int fs_mkdir(const char *path, mode_t mode)
     if (dir_inum == -ENOENT || dir_inum == -ENOTDIR) {
         return -EEXIST;
     }
+
+
     // check if dest file exists
     int inum = translate(path);
-    if (inum < 0) {
+    if (inum > 0) {
         return -EEXIST;
     }
     // check entries in father dir not excceed 32
@@ -489,6 +491,10 @@ static int fs_mkdir(const char *path, mode_t mode)
     int free_dirent_num = find_free_dirent_num(father_inode);
     if(free_dirent_num < 0) {
         return -ENOSPC;
+    }
+    //check father is a dir
+    if (!S_ISDIR(father_inode->mode)) {
+        return -EEXIST;
     }
 
     // here allocate inode region, i.e. set inode region bitmap
