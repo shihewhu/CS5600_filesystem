@@ -28,7 +28,7 @@ function create_file {
 
 len=2000
 count=1
-while [ $len -le 140000 ]
+while [ $len -le 440000 ]
 do
 	#statements
 	create_file $len "put-test-file.$count"
