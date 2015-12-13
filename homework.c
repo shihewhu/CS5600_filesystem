@@ -481,7 +481,7 @@ static int fs_mkdir(const char *path, mode_t mode)
     }
     // check if dest file exists
     int inum = translate(path);
-    if (inum > 0) {
+    if (inum < 0) {
         return -EEXIST;
     }
     // check entries in father dir not excceed 32
@@ -511,6 +511,7 @@ static int fs_mkdir(const char *path, mode_t mode)
     disk->ops->write(disk, new_inode.direct[0], 1, clear_block);
     int free_inum = find_free_inode_map_bit();
     if (free_inum < 0) {
+        free(clear_block);
         return -ENOSPC;
     }
     FD_SET(free_inum, inode_map);
@@ -539,6 +540,7 @@ static int fs_mkdir(const char *path, mode_t mode)
     memcpy(&dir_blk[free_dirent_num], &new_dirent, sizeof(struct fs5600_dirent));
     disk->ops->write(disk, father_inode->direct[0], 1, dir_blk);
 
+    free(clear_block);
     free(dir_blk);
     free(_path);
     return 0;
