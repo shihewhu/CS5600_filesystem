@@ -1,9 +1,11 @@
 #!/bin/bash
 rm foo.img
 ./mktest foo.img
-sleep 0.1
+# sleep 0.1
+# make clean
+# make
 make clean
-make
+make COVERAGE=1
 ./homework -cmdline -image foo.img <<EOF
 rm file.7
 rm file.A
