@@ -78,7 +78,7 @@ struct blkdev *image_create(char *path)
 
     assert(dev != NULL && im != NULL);
     im->path = strdup(path);    /* save a copy for error reporting */
-    
+
     im->fd = open(path, O_RDWR);
     if (im->fd < 0) {
         fprintf(stderr, "can't open image %s: %s\n", path, strerror(errno));
@@ -97,7 +97,7 @@ struct blkdev *image_create(char *path)
     if (sb.st_size % BLOCK_SIZE != 0)
         fprintf(stderr, "warning: file %s not a multiple of %d bytes\n",
                 path, BLOCK_SIZE);
-    
+
     im->nblks = sb.st_size / BLOCK_SIZE;
     dev->private = im;
     dev->ops = &image_ops;
