@@ -197,11 +197,12 @@ static void set_attr(struct fs5600_inode inode, struct stat *sb) {
     memset(sb, 0, sizeof(struct stat));
     sb->st_mode = inode.mode;
     sb->st_uid = inode.uid;
+    sb->st_gid = inode.gid;
     sb->st_size = inode.size;
     sb->st_blocks = 1 + ((inode.size - 1) / FS_BLOCK_SIZE);
     sb->st_nlink = 1;
     sb->st_atime = inode.mtime;
-    sb->st_ctime = inode.mtime;
+    sb->st_ctime = inode.ctime;
     sb->st_mtime = inode.mtime;
 }
 
@@ -370,6 +371,8 @@ static int fs_mknod(const char *path, mode_t mode, dev_t dev)
             .mtime = time_raw_format,
             .size = 0,
     };
+    printf("uid is: %d\n", getuid());
+    printf("gid is: %d\n", getgid());
     int free_inum = find_free_inode_map_bit();
     if (free_inum < 0) {
         return -ENOSPC;
