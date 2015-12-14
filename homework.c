@@ -200,9 +200,9 @@ static void set_attr(struct fs5600_inode inode, struct stat *sb) {
     sb->st_size = inode.size;
     sb->st_blocks = 1 + ((inode.size - 1) / FS_BLOCK_SIZE);
     sb->st_nlink = 1;
-    sb->st_atime = inode.ctime;
-    sb->st_ctime = inode.ctime;
-    sb->st_mtime = inode.ctime;
+    sb->st_atime = inode.mtime;
+    sb->st_ctime = inode.mtime;
+    sb->st_mtime = inode.mtime;
 }
 
 /* getattr - get file or directory attributes. For a description of
@@ -867,7 +867,7 @@ int fs_utime(const char *path, struct utimbuf *ut)
     inode = &inode_region[inum];
     inode->mtime = ut->modtime;
     update_inode(inum);
-    return -EOPNOTSUPP;
+    return 0;
 }
 
 
