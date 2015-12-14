@@ -586,6 +586,7 @@ static int fs_truncate(const char *path, off_t len)
     int temp_blk_num;
     int i;
     for (i = 0; i < N_DIRECT; i++) {
+        inode->direct[i] = 0;
         temp_blk_num = inode->direct[i];
         if (temp_blk_num != 0) {
             FD_CLR(temp_blk_num, block_map);
