@@ -604,6 +604,8 @@ static int fs_truncate(const char *path, off_t len)
 
     // set the size of inode as 0
     inode_region[inum].size = 0;
+    inode_region[inum].indir_1 = 0;
+    inode_region[inum].indir_2 = 0;
     update_inode(inum);
     return 0;
 }
