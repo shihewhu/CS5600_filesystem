@@ -617,11 +617,12 @@ void truncate_2nd_level(int h1t_root_blk_num) {
         int temp_blk_num = h1t_blk[i];
         if (temp_blk_num != 0) {
             FD_CLR(temp_blk_num, block_map);
-            update_bitmap();
         } else {
             break;
         }
     }
+    FD_CLR(h1t_root_blk_num, block_map);
+    update_bitmap();
 }
 
 void truncate_3rd_level(int h2t_root_blk_num) {
@@ -631,6 +632,8 @@ void truncate_3rd_level(int h2t_root_blk_num) {
     for (i = 0; i < 256; ++i) {
         truncate_2nd_level(h2t_blk[i]);
     }
+    FD_CLR(h2t_root_blk_num, block_map);
+    update_bitmap();
 }
 
 /* unlink - delete a file
