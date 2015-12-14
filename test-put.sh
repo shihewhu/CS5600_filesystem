@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 
-# get args
 
 echo "cleaning files"
 if [[ -f "test.img" ]]; then
@@ -15,34 +14,34 @@ make clean
 make
 
 echo "making test files"
-#helper function
+#help function
 function create_file {
 	if [[ -f $2 ]]; then
 		#clean file
 		echo "" > $2
 	fi
 	for i in $(seq 1 $1) ; do
-		random_number=$(( ( RANDOM % 1000 )  + 1 ))
+		random_number=$(( ( RAsNDOM % 1000 )  + 1 ))
 		echo $random_number >> $2
 	done
 }
 
 len=2000
 count=1
-while [ $len -le 140000 ]
+while [ $len -le 440000 ]
 do
 	#statements
 	create_file $len "put-test-file.$count"
-	len=$((len + 2000))
+	len=$((len + 5000))
 	count=$((count + 1))
 done
 
 count=$((count - 1))
 echo "starting test"
 
-for i in `seq 1 $count`; do
+for i in $(seq 1 $count); do
 	testing_file="put-test-file.$i"
-	output_file="/tmp/$testing_file"
+	output_file="/tmp/put-test-file.$i"
 	cksum1=$(cksum $testing_file)
 	./mktest test.img
 	./homework -cmdline -image test.img << EOF
