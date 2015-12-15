@@ -63,33 +63,33 @@
         -:   58: *   - read superblock
         -:   59: *   - allocate memory, read bitmaps and inodes
         -:   60: */
-      493:   61:void* fs_init(struct fuse_conn_info *conn)
+      582:   61:void* fs_init(struct fuse_conn_info *conn)
         -:   62:{
         -:   63:    struct fs5600_super sb;
         -:   64:    /* here 1 stands for block size, here is 1024 bytes */
-      493:   65:    disk->ops->read(disk, 0, 1, &sb);
+      582:   65:    disk->ops->read(disk, 0, 1, &sb);
         -:   66:
         -:   67:    /* your code here */
         -:   68:    /* read bitmaps */
-      493:   69:    inode_map = malloc(sb.inode_map_sz * FS_BLOCK_SIZE);
-      493:   70:    disk->ops->read(disk, 1, sb.inode_map_sz, inode_map);
-      493:   71:    inode_map_sz = sb.inode_map_sz;
-      493:   72:    printf("%d\n", inode_map_sz);
+      582:   69:    inode_map = malloc(sb.inode_map_sz * FS_BLOCK_SIZE);
+      582:   70:    disk->ops->read(disk, 1, sb.inode_map_sz, inode_map);
+      582:   71:    inode_map_sz = sb.inode_map_sz;
+        -:   72:    // printf("%d\n", inode_map_sz);
         -:   73:
-      493:   74:    block_map = malloc(sb.block_map_sz * FS_BLOCK_SIZE);
-      493:   75:    disk->ops->read(disk, sb.inode_map_sz + 1, sb.block_map_sz, block_map);
-      493:   76:    block_map_sz = sb.block_map_sz;
+      582:   74:    block_map = malloc(sb.block_map_sz * FS_BLOCK_SIZE);
+      582:   75:    disk->ops->read(disk, sb.inode_map_sz + 1, sb.block_map_sz, block_map);
+      582:   76:    block_map_sz = sb.block_map_sz;
         -:   77:
-      493:   78:    printf("%d\n", block_map_sz);
+        -:   78:    // printf("%d\n", block_map_sz);
         -:   79:    /* read inodes */
-      493:   80:    inode_region = malloc(sb.inode_region_sz * FS_BLOCK_SIZE);
-      493:   81:    int inode_region_pos = 1 + sb.inode_map_sz + sb.block_map_sz;
-      493:   82:    disk->ops->read(disk, inode_region_pos, sb.inode_region_sz, inode_region);
-      493:   83:    printf("%d\n", sb.inode_region_sz);
-      493:   84:    num_of_blocks = sb.num_blocks;
-      493:   85:    printf("%d\n", num_of_blocks);
+      582:   80:    inode_region = malloc(sb.inode_region_sz * FS_BLOCK_SIZE);
+      582:   81:    int inode_region_pos = 1 + sb.inode_map_sz + sb.block_map_sz;
+      582:   82:    disk->ops->read(disk, inode_region_pos, sb.inode_region_sz, inode_region);
+        -:   83:    // printf("%d\n", sb.inode_region_sz);
+      582:   84:    num_of_blocks = sb.num_blocks;
+        -:   85:    // printf("%d\n", num_of_blocks);
         -:   86:
-      493:   87:    return NULL;
+      582:   87:    return NULL;
         -:   88:}
         -:   89:
         -:   90:/* Note on path translation errors:
@@ -114,105 +114,105 @@
         -:  109: *    free(_path);
         -:  110: */
         -:  111:/* translate: return the inode number of given path */
-    19193:  112:static int translate(const char *path) {
+    15404:  112:static int translate(const char *path) {
         -:  113:    /* split the path */
         -:  114:    char *_path;
-    19193:  115:    _path = strdup(path);
+    15404:  115:    _path = strdup(path);
         -:  116:    /* traverse to path */
         -:  117:    /* root father_inode */
-    19193:  118:    int inode_num = 1;
+    15404:  118:    int inode_num = 1;
         -:  119:    struct fs5600_inode *father_inode;
         -:  120:    struct fs5600_dirent *dir;
-    19193:  121:    dir = malloc(FS_BLOCK_SIZE);
+    15404:  121:    dir = malloc(FS_BLOCK_SIZE);
         -:  122:
-    19193:  123:    struct fs5600_dirent dummy_dir = {
+    15404:  123:    struct fs5600_dirent dummy_dir = {
         -:  124:	.valid = 1,
         -:  125:	.isDir = 1,
         -:  126:	.inode = inode_num,
         -:  127:	.name = "/",
         -:  128:    };
-    19193:  129:    struct fs5600_dirent *current_dir = &dummy_dir;
+    15404:  129:    struct fs5600_dirent *current_dir = &dummy_dir;
         -:  130:
         -:  131:    char *token;
-    19193:  132:    char *delim = "/";
-    19193:  133:    token = strtok(_path, delim);
-    19193:  134:    int error = 0;
+    15404:  132:    char *delim = "/";
+    15404:  133:    token = strtok(_path, delim);
+    15404:  134:    int error = 0;
         -:  135:    /* traverse all the subsides */
         -:  136:    /* if found, return corresponding father_inode */
         -:  137:    /* else, return error */
-    74818:  138:    while (token != NULL) {
-    36729:  139:        if (current_dir->valid == 0) {
+    55749:  138:    while (token != NULL) {
+    25301:  139:        if (current_dir->valid == 0) {
     #####:  140:	        error = -ENOENT;
     #####:  141:            break;
         -:  142:	    }
-    36729:  143:	    if (current_dir->isDir == 0) {
+    25301:  143:	    if (current_dir->isDir == 0) {
     #####:  144:	        if (token != NULL) {
     #####:  145:                error = -ENOTDIR;
         -:  146:            }
     #####:  147:            break;
         -:  148:	    }
-    36729:  149:	    father_inode = &inode_region[inode_num];
-    36729:  150:	    int block_pos = father_inode->direct[0];
-    36729:  151:	    disk->ops->read(disk, block_pos, 1, dir);
+    25301:  149:	    father_inode = &inode_region[inode_num];
+    25301:  150:	    int block_pos = father_inode->direct[0];
+    25301:  151:	    disk->ops->read(disk, block_pos, 1, dir);
         -:  152:	    int i;
-    36729:  153:	    int found = 0;
-  1212057:  154:	    for (i = 0; i < 32; i++) {
-  1175328:  155:            if (strcmp(dir[i].name, token) == 0 && dir[i].valid == 1) {
-    36432:  156:                found = 1;
-    36432:  157:                inode_num = dir[i].inode;
-    36432:  158:                current_dir = &dir[i];
+    25301:  153:	    int found = 0;
+   834933:  154:	    for (i = 0; i < 32; i++) {
+   809632:  155:            if (strcmp(dir[i].name, token) == 0 && dir[i].valid == 1) {
+    24941:  156:                found = 1;
+    24941:  157:                inode_num = dir[i].inode;
+    24941:  158:                current_dir = &dir[i];
         -:  159:            }
         -:  160:	    }
-    36729:  161:	    if (found == 0) {
-      297:  162:            error = -ENOENT;
-      297:  163:            break;
+    25301:  161:	    if (found == 0) {
+      360:  162:            error = -ENOENT;
+      360:  163:            break;
         -:  164:	    }
-    36432:  165:        token = strtok(NULL, delim);
+    24941:  165:        token = strtok(NULL, delim);
         -:  166:    }
         -:  167:
-    19193:  168:    free(dir);
-    19193:  169:    free(_path);
-    19193:  170:    if (error != 0) {
-      297:  171:        return error;
+    15404:  168:    free(dir);
+    15404:  169:    free(_path);
+    15404:  170:    if (error != 0) {
+      360:  171:        return error;
         -:  172:    }
-    18896:  173:    return inode_num;
+    15044:  173:    return inode_num;
         -:  174:}
         -:  175:int trancate_path (const char *path, char **trancated_path);
         -:  176:/* trancate the last token from path
         -:  177: * return 1 if succeed, 0 if not*/
-      281:  178:int trancate_path (const char *path, char **trancated_path) {
-      281:  179:    int i = strlen(path) - 1;
+      310:  178:int trancate_path (const char *path, char **trancated_path) {
+      310:  179:    int i = strlen(path) - 1;
         -:  180:    // strip the tailling '/'
         -:  181:    // deal with '///' case
-      306:  182:    for (; i >= 0; i--) {
-      281:  183:        if (path[i] != '/') {
-      256:  184:            break;
+      335:  182:    for (; i >= 0; i--) {
+      310:  183:        if (path[i] != '/') {
+      285:  184:            break;
         -:  185:        }
         -:  186:    }
-     4715:  187:    for (; i >= 0; i--) {
-     4690:  188:    	if (path[i] == '/') {
-      256:  189:            *trancated_path = (char*)malloc(sizeof(char) * (i + 2));
-      256:  190:            memcpy(*trancated_path, path, i + 1);
-      256:  191:            (*trancated_path)[i + 1] = '\0';
-      256:  192:            return 1;
+     5096:  187:    for (; i >= 0; i--) {
+     5071:  188:    	if (path[i] == '/') {
+      285:  189:            *trancated_path = (char*)malloc(sizeof(char) * (i + 2));
+      285:  190:            memcpy(*trancated_path, path, i + 1);
+      285:  191:            (*trancated_path)[i + 1] = '\0';
+      285:  192:            return 1;
         -:  193:    	}
         -:  194:    }
        25:  195:    return 0;
         -:  196:}
         -:  197:
-      444:  198:static void set_attr(struct fs5600_inode inode, struct stat *sb) {
+      484:  198:static void set_attr(struct fs5600_inode inode, struct stat *sb) {
         -:  199:    /* set every other bit to zero */
-      444:  200:    memset(sb, 0, sizeof(struct stat));
-      444:  201:    sb->st_mode = inode.mode;
-      444:  202:    sb->st_uid = inode.uid;
-      444:  203:    sb->st_gid = inode.gid;
-      444:  204:    sb->st_size = inode.size;
-      444:  205:    sb->st_blocks = 1 + ((inode.size - 1) / FS_BLOCK_SIZE);
-      444:  206:    sb->st_nlink = 1;
-      444:  207:    sb->st_atime = inode.mtime;
-      444:  208:    sb->st_ctime = inode.ctime;
-      444:  209:    sb->st_mtime = inode.mtime;
-      444:  210:}
+      484:  200:    memset(sb, 0, sizeof(struct stat));
+      484:  201:    sb->st_mode = inode.mode;
+      484:  202:    sb->st_uid = inode.uid;
+      484:  203:    sb->st_gid = inode.gid;
+      484:  204:    sb->st_size = inode.size;
+      484:  205:    sb->st_blocks = 1 + ((inode.size - 1) / FS_BLOCK_SIZE);
+      484:  206:    sb->st_nlink = 1;
+      484:  207:    sb->st_atime = inode.mtime;
+      484:  208:    sb->st_ctime = inode.ctime;
+      484:  209:    sb->st_mtime = inode.mtime;
+      484:  210:}
         -:  211:
         -:  212:/* getattr - get file or directory attributes. For a description of
         -:  213: *  the fields in 'struct stat', see 'man lstat'.
@@ -223,19 +223,19 @@
         -:  218: *
         -:  219: * errors - path translation, ENOENT
         -:  220: */
-      492:  221:static int fs_getattr(const char *path, struct stat *sb)
+      581:  221:static int fs_getattr(const char *path, struct stat *sb)
         -:  222:{
-      492:  223:    fs_init(NULL);
-      492:  224:    int inum = translate(path);
-      492:  225:    if (inum == -ENOENT || inum == -ENOTDIR) {
-      181:  226:    	return -ENOENT;
+      581:  223:    fs_init(NULL);
+      581:  224:    int inum = translate(path);
+      581:  225:    if (inum == -ENOENT || inum == -ENOTDIR) {
+      230:  226:    	return -ENOENT;
         -:  227:    }
         -:  228:
-      311:  229:    struct fs5600_inode inode = inode_region[inum];
-      311:  230:    set_attr(inode, sb);
+      351:  229:    struct fs5600_inode inode = inode_region[inum];
+      351:  230:    set_attr(inode, sb);
         -:  231:    /* what should I return if succeeded?
         -:  232:     success (0) */
-      311:  233:    return 0;
+      351:  233:    return 0;
         -:  234:}
         -:  235:
         -:  236:/* check whether this inode is a directory */
@@ -341,126 +341,126 @@
         -:  336:* if !S_ISREG(mode) [i.e. 'mode' specifies a device special
         -:  337:* file or other non-file object] then return -EINVAL
         -:  338:*/
-       81:  339:static int fs_mknod(const char *path, mode_t mode, dev_t dev)
+       95:  339:static int fs_mknod(const char *path, mode_t mode, dev_t dev)
         -:  340:{
-       81:  341:    if (!S_ISREG(mode)) {
+       95:  341:    if (!S_ISREG(mode)) {
     #####:  342:        return -EINVAL;
         -:  343:    }
         -:  344:    // check father dir exist
         -:  345:    char *father_path;
-       81:  346:    if (!trancate_path(path, &father_path)) {
+       95:  346:    if (!trancate_path(path, &father_path)) {
         -:  347:        // this means there is no nod to make, path is "/"
     #####:  348:        return -1;
         -:  349:    }
-       81:  350:    int dir_inum = translate(father_path);
-       81:  351:    if (dir_inum == -ENOENT || dir_inum == -ENOTDIR) {
+       95:  350:    int dir_inum = translate(father_path);
+       95:  351:    if (dir_inum == -ENOENT || dir_inum == -ENOTDIR) {
     #####:  352:        return -EEXIST;
         -:  353:    }
         -:  354:    // check if dest file exists
-       81:  355:    int inum = translate(path);
-       81:  356:    if (inum > 0) {
+       95:  355:    int inum = translate(path);
+       95:  356:    if (inum > 0) {
     #####:  357:        return -EEXIST;
         -:  358:    }
         -:  359:    // check entries in father dir not excceed 32
-       81:  360:    struct fs5600_inode *father_inode = &inode_region[dir_inum];
-       81:  361:    int free_dirent_num = find_free_dirent_num(father_inode);
-       81:  362:    if(free_dirent_num < 0) {
+       95:  360:    struct fs5600_inode *father_inode = &inode_region[dir_inum];
+       95:  361:    int free_dirent_num = find_free_dirent_num(father_inode);
+       95:  362:    if(free_dirent_num < 0) {
         1:  363:        return -ENOSPC;
         -:  364:    }
         -:  365:
         -:  366:    // here allocate inode region, i.e. set inode region bitmap
         -:  367:    time_t time_raw_format;
-       80:  368:    time( &time_raw_format );
-      240:  369:    struct fs5600_inode new_inode = {
-       80:  370:            .uid = getuid(),
-       80:  371:            .gid = getgid(),
+       94:  368:    time( &time_raw_format );
+      282:  369:    struct fs5600_inode new_inode = {
+       94:  370:            .uid = getuid(),
+       94:  371:            .gid = getgid(),
         -:  372:            .mode = mode,
         -:  373:            .ctime = time_raw_format,
         -:  374:            .mtime = time_raw_format,
         -:  375:            .size = 0,
         -:  376:    };
-       80:  377:    int free_inum = find_free_inode_map_bit();
-       80:  378:    if (free_inum < 0) {
+       94:  377:    int free_inum = find_free_inode_map_bit();
+       94:  378:    if (free_inum < 0) {
     #####:  379:        return -ENOSPC;
         -:  380:    }
-       80:  381:    FD_SET(free_inum, inode_map);
-       80:  382:    update_bitmap();
+       94:  381:    FD_SET(free_inum, inode_map);
+       94:  382:    update_bitmap();
         -:  383:
         -:  384:    // write father_inode to the allocated pos in father_inode region
-       80:  385:    memcpy(&inode_region[free_inum], &new_inode, sizeof(struct fs5600_inode));
-       80:  386:    update_inode(free_inum);
+       94:  385:    memcpy(&inode_region[free_inum], &new_inode, sizeof(struct fs5600_inode));
+       94:  386:    update_inode(free_inum);
         -:  387:
         -:  388:
         -:  389:    // set valid, isDir, father_inode, name in father father_inode dirent
         -:  390:    // then write dirent to image
-       80:  391:    char *_path = strdup(path);
-       80:  392:    char *tmp_name = get_name(_path);
-       80:  393:    struct fs5600_dirent new_dirent = {
+       94:  391:    char *_path = strdup(path);
+       94:  392:    char *tmp_name = get_name(_path);
+       94:  393:    struct fs5600_dirent new_dirent = {
         -:  394:            .valid = 1,
         -:  395:            .isDir = 0,
         -:  396:            .inode = free_inum,
         -:  397:            .name = "",
         -:  398:    };
-       80:  399:    assert(strlen(tmp_name) < 28);
-       80:  400:    strncpy(new_dirent.name, tmp_name, strlen(tmp_name));
-       80:  401:    new_dirent.name[strlen(tmp_name)] = '\0';
+       94:  399:    assert(strlen(tmp_name) < 28);
+       94:  400:    strncpy(new_dirent.name, tmp_name, strlen(tmp_name));
+       94:  401:    new_dirent.name[strlen(tmp_name)] = '\0';
         -:  402:
-       80:  403:    struct fs5600_dirent *dir_blk = (struct fs5600_dirent *)calloc(BLOCK_SIZE / sizeof(int), sizeof(int));
-       80:  404:    disk->ops->read(disk, (father_inode->direct)[0], 1, dir_blk);
-       80:  405:    memcpy(&dir_blk[free_dirent_num], &new_dirent, sizeof(struct fs5600_dirent));
-       80:  406:    disk->ops->write(disk, father_inode->direct[0], 1, dir_blk);
-       80:  407:    free(dir_blk);
-       80:  408:    free(_path);
-       80:  409:    return 0;
+       94:  403:    struct fs5600_dirent *dir_blk = (struct fs5600_dirent *)calloc(BLOCK_SIZE / sizeof(int), sizeof(int));
+       94:  404:    disk->ops->read(disk, (father_inode->direct)[0], 1, dir_blk);
+       94:  405:    memcpy(&dir_blk[free_dirent_num], &new_dirent, sizeof(struct fs5600_dirent));
+       94:  406:    disk->ops->write(disk, father_inode->direct[0], 1, dir_blk);
+       94:  407:    free(dir_blk);
+       94:  408:    free(_path);
+       94:  409:    return 0;
         -:  410:}
         -:  411:
-    18300:  412:void update_inode(int inum) {
-    18300:  413:    int offset = 1 + inode_map_sz + block_map_sz + (inum / 16);
-    18300:  414:    disk->ops->write(disk, offset, 1, &inode_region[inum - (inum % 16)]);
-    18300:  415:}
+    14458:  412:void update_inode(int inum) {
+    14458:  413:    int offset = 1 + inode_map_sz + block_map_sz + (inum / 16);
+    14458:  414:    disk->ops->write(disk, offset, 1, &inode_region[inum - (inum % 16)]);
+    14458:  415:}
         -:  416:
        30:  417:static void strip(char *path) {
        30:  418:	if (path[strlen(path) - 1] == '/') {
     #####:  419:		path[strlen(path) - 1] = '\0';
         -:  420:	}
        30:  421:}
-      222:  422:static char *get_name(char *path) {
-      222:  423:    int i = strlen(path) - 1;
-     4059:  424:    for (; i >= 0; i--) {
-     4059:  425:        if (path[i] == '/') {
-      222:  426:            i++;
-      222:  427:            break;
+      251:  422:static char *get_name(char *path) {
+      251:  423:    int i = strlen(path) - 1;
+     4440:  424:    for (; i >= 0; i--) {
+     4440:  425:        if (path[i] == '/') {
+      251:  426:            i++;
+      251:  427:            break;
         -:  428:        }
         -:  429:    }
-      222:  430:    char *result = &path[i];
-      222:  431:    return result;
+      251:  430:    char *result = &path[i];
+      251:  431:    return result;
         -:  432:}
         -:  433:
-      112:  434:int find_free_inode_map_bit() {// find a free inode_region
-      112:  435:    int inode_capacity = inode_map_sz * FS_BLOCK_SIZE * 8;
+      126:  434:int find_free_inode_map_bit() {// find a free inode_region
+      126:  435:    int inode_capacity = inode_map_sz * FS_BLOCK_SIZE * 8;
         -:  436:    int i;
-     2317:  437:    for (i = 2; i < inode_capacity; i++) {
-     2317:  438:        if (!FD_ISSET(i, inode_map)) {
-      112:  439:            return i;
+     3008:  437:    for (i = 2; i < inode_capacity; i++) {
+     3008:  438:        if (!FD_ISSET(i, inode_map)) {
+      126:  439:            return i;
         -:  440:        }
         -:  441:    }
     #####:  442:    return -ENOSPC;
         -:  443:}
         -:  444:
-      114:  445:int find_free_dirent_num(struct fs5600_inode *inode) {
-      114:  446:    struct fs5600_dirent *dir = (struct fs5600_dirent *)malloc(BLOCK_SIZE);
-      114:  447:    disk->ops->read(disk, (inode->direct)[0], 1, dir);
+      128:  445:int find_free_dirent_num(struct fs5600_inode *inode) {
+      128:  446:    struct fs5600_dirent *dir = (struct fs5600_dirent *)malloc(BLOCK_SIZE);
+      128:  447:    disk->ops->read(disk, (inode->direct)[0], 1, dir);
         -:  448:
-      114:  449:    int free_dirent_num = -1;
+      128:  449:    int free_dirent_num = -1;
         -:  450:    int i;
-     1167:  451:    for (i = 0; i < 32; i++) {
-     1165:  452:        if (!dir[i].valid) {
-      112:  453:            free_dirent_num = i;
-      112:  454:            break;
+     1261:  451:    for (i = 0; i < 32; i++) {
+     1259:  452:        if (!dir[i].valid) {
+      126:  453:            free_dirent_num = i;
+      126:  454:            break;
         -:  455:        }
         -:  456:    }
-      114:  457:    free(dir);
-      114:  458:    return free_dirent_num;
+      128:  457:    free(dir);
+      128:  458:    return free_dirent_num;
         -:  459:}
         -:  460:
         -:  461:int find_free_block_number();
@@ -570,141 +570,141 @@
         -:  565: * Errors - path resolution, ENOENT, EISDIR, EINVAL
         -:  566: *    return EINVAL if len > 0.
         -:  567: */
-       85:  568:static int fs_truncate(const char *path, off_t len)
+       99:  568:static int fs_truncate(const char *path, off_t len)
         -:  569:{
         -:  570:    /* We'll cheat by only implementing this for the case of len==0,
         -:  571:     * and an error otherwise, as 99.99% of the time that's how
         -:  572:     * truncate is used.
         -:  573:     */
-       85:  574:    if (len != 0)
+       99:  574:    if (len != 0)
     #####:  575:	return -EINVAL;		/* invalid argument */
         -:  576:
-       85:  577:    int inum = translate(path);
-       85:  578:    if (inum == -ENOENT || inum == -ENOTDIR) {
+       99:  577:    int inum = translate(path);
+       99:  578:    if (inum == -ENOENT || inum == -ENOTDIR) {
     #####:  579:        return -ENOENT;
         -:  580:    }
-       85:  581:    struct fs5600_inode *inode = &inode_region[inum];
-       85:  582:    if  (S_ISDIR(inode->mode)) {
+       99:  581:    struct fs5600_inode *inode = &inode_region[inum];
+       99:  582:    if  (S_ISDIR(inode->mode)) {
     #####:  583:        return -EISDIR;
         -:  584:    }
         -:  585:
         -:  586:    // clear the block bit map of this inode
         -:  587:    int temp_blk_num;
         -:  588:    int i;
-      324:  589:    for (i = 0; i < N_DIRECT; i++) {
-      289:  590:        temp_blk_num = inode->direct[i];
-      289:  591:        inode->direct[i] = 0;
-      289:  592:        if (temp_blk_num != 0) {
-      239:  593:            FD_CLR(temp_blk_num, block_map);
-      239:  594:            update_bitmap();
+      428:  589:    for (i = 0; i < N_DIRECT; i++) {
+      378:  590:        temp_blk_num = inode->direct[i];
+      378:  591:        inode->direct[i] = 0;
+      378:  592:        if (temp_blk_num != 0) {
+      329:  593:            FD_CLR(temp_blk_num, block_map);
+      329:  594:            update_bitmap();
         -:  595:        } else {
-       50:  596:            break;
+       49:  596:            break;
         -:  597:        }
         -:  598:    }
-       85:  599:    if (inode->size > N_DIRECT * BLOCK_SIZE) {
-       35:  600:        truncate_2nd_level(inode->indir_1);
+       99:  599:    if (inode->size > N_DIRECT * BLOCK_SIZE) {
+       50:  600:        truncate_2nd_level(inode->indir_1);
         -:  601:    }
         -:  602:
-       85:  603:    if (inode->size > (BLOCK_SIZE / 4) * BLOCK_SIZE + N_DIRECT * BLOCK_SIZE) {
-       14:  604:        truncate_3rd_level(inode->indir_2);
+       99:  603:    if (inode->size > (BLOCK_SIZE / 4) * BLOCK_SIZE + N_DIRECT * BLOCK_SIZE) {
+       29:  604:        truncate_3rd_level(inode->indir_2);
         -:  605:    }
         -:  606:
         -:  607:    // set the size of inode as 0
-       85:  608:    inode_region[inum].size = 0;
-       85:  609:    inode_region[inum].indir_1 = 0;
-       85:  610:    inode_region[inum].indir_2 = 0;
-       85:  611:    update_inode(inum);
-       85:  612:    return 0;
+       99:  608:    inode_region[inum].size = 0;
+       99:  609:    inode_region[inum].indir_1 = 0;
+       99:  610:    inode_region[inum].indir_2 = 0;
+       99:  611:    update_inode(inum);
+       99:  612:    return 0;
         -:  613:}
         -:  614:
         -:  615:
-       57:  616:void truncate_2nd_level(int h1t_root_blk_num) {
+      102:  616:void truncate_2nd_level(int h1t_root_blk_num) {
         -:  617:    int h1t_blk[256];
-       57:  618:    disk->ops->read(disk, h1t_root_blk_num, 1, h1t_blk);
+      102:  618:    disk->ops->read(disk, h1t_root_blk_num, 1, h1t_blk);
         -:  619:    int i;
-     9724:  620:    for (i = 0; i < 256; ++i) {
-     9702:  621:        int temp_blk_num = h1t_blk[i];
-     9702:  622:        if (temp_blk_num != 0) {
-     9667:  623:            FD_CLR(temp_blk_num, block_map);
+    20698:  620:    for (i = 0; i < 256; ++i) {
+    20646:  621:        int temp_blk_num = h1t_blk[i];
+    20646:  622:        if (temp_blk_num != 0) {
+    20596:  623:            FD_CLR(temp_blk_num, block_map);
         -:  624:        } else {
-       35:  625:            break;
+       50:  625:            break;
         -:  626:        }
         -:  627:    }
-       57:  628:    FD_CLR(h1t_root_blk_num, block_map);
-       57:  629:    update_bitmap();
-       57:  630:}
+      102:  628:    FD_CLR(h1t_root_blk_num, block_map);
+      102:  629:    update_bitmap();
+      102:  630:}
         -:  631:
-       14:  632:void truncate_3rd_level(int h2t_root_blk_num) {
-       14:  633:    sleep(0.1);
+       29:  632:void truncate_3rd_level(int h2t_root_blk_num) {
+       29:  633:    sleep(0.1);
         -:  634:    int h2t_blk[256];
-       14:  635:    disk->ops->read(disk, h2t_root_blk_num, 1, h2t_blk);
+       29:  635:    disk->ops->read(disk, h2t_root_blk_num, 1, h2t_blk);
         -:  636:    int i;
-       36:  637:    for (i = 0; i < 256; ++i) {
-       36:  638:        int temp_blk_num = h2t_blk[i];
-       36:  639:        if (temp_blk_num == 0) {
-       14:  640:            break;
+       81:  637:    for (i = 0; i < 256; ++i) {
+       81:  638:        int temp_blk_num = h2t_blk[i];
+       81:  639:        if (temp_blk_num == 0) {
+       29:  640:            break;
         -:  641:        }
-       22:  642:        truncate_2nd_level(h2t_blk[i]);
+       52:  642:        truncate_2nd_level(h2t_blk[i]);
         -:  643:    }
-       14:  644:    FD_CLR(h2t_root_blk_num, block_map);
-       14:  645:    update_bitmap();
-       14:  646:}
+       29:  644:    FD_CLR(h2t_root_blk_num, block_map);
+       29:  645:    update_bitmap();
+       29:  646:}
         -:  647:
         -:  648:/* unlink - delete a file
         -:  649: *  Errors - path resolution, ENOENT, EISDIR
         -:  650: * Note that you have to delete (i.e. truncate) all the data.
         -:  651: */
-       78:  652:static int fs_unlink(const char *path)
+       93:  652:static int fs_unlink(const char *path)
         -:  653:{
-       78:  654:    int inum = translate(path);
-       78:  655:    if (inum == -ENOENT || inum == -ENOTDIR) {
+       93:  654:    int inum = translate(path);
+       93:  655:    if (inum == -ENOENT || inum == -ENOTDIR) {
     #####:  656:        return -ENOENT;
         -:  657:    }
-       78:  658:    struct fs5600_inode *inode = &inode_region[inum];
-       78:  659:    if  (S_ISDIR(inode->mode)) {
+       93:  658:    struct fs5600_inode *inode = &inode_region[inum];
+       93:  659:    if  (S_ISDIR(inode->mode)) {
     #####:  660:        return -EISDIR;
         -:  661:    }
         -:  662:
         -:  663:    // truncate all the data
-       78:  664:    int truncate_result = fs_truncate(path, 0);
-       78:  665:    if (truncate_result != 0) {
+       93:  664:    int truncate_result = fs_truncate(path, 0);
+       93:  665:    if (truncate_result != 0) {
     #####:  666:        return truncate_result;
         -:  667:    }
         -:  668:
         -:  669:    char *father_path;
-       78:  670:    trancate_path(path, &father_path);
-       78:  671:    int father_inum = translate(father_path);
-       78:  672:    free(father_path);
-       78:  673:    struct fs5600_inode *father_inode = &inode_region[father_inum];
+       93:  670:    trancate_path(path, &father_path);
+       93:  671:    int father_inum = translate(father_path);
+       93:  672:    free(father_path);
+       93:  673:    struct fs5600_inode *father_inode = &inode_region[father_inum];
         -:  674:
         -:  675:
         -:  676:    // remove inode, i.e. clear inode_map corresponding bit
-       78:  677:    FD_CLR(inum, inode_map);
-       78:  678:    update_bitmap();
+       93:  677:    FD_CLR(inum, inode_map);
+       93:  678:    update_bitmap();
         -:  679:
         -:  680:    // remove entry from father dir
-       78:  681:    char *_path = strdup(path);
-       78:  682:    char *name = get_name(_path);
+       93:  681:    char *_path = strdup(path);
+       93:  682:    char *name = get_name(_path);
         -:  683:
-       78:  684:    struct fs5600_dirent *father_dir = malloc(FS_BLOCK_SIZE);
-       78:  685:    disk->ops->read(disk, father_inode->direct[0], 1, father_dir);
-       78:  686:    int found = 0;
+       93:  684:    struct fs5600_dirent *father_dir = malloc(FS_BLOCK_SIZE);
+       93:  685:    disk->ops->read(disk, father_inode->direct[0], 1, father_dir);
+       93:  686:    int found = 0;
         -:  687:    int i;
-     2574:  688:    for (i = 0; i < 32; ++i) {
-     2496:  689:        if (strcmp(father_dir[i].name, name) == 0) {
-       78:  690:            if (father_dir[i].valid == 1 ) {
-       78:  691:                father_dir[i].valid = 0;
-       78:  692:                found = 1;
+     3069:  688:    for (i = 0; i < 32; ++i) {
+     2976:  689:        if (strcmp(father_dir[i].name, name) == 0) {
+       93:  690:            if (father_dir[i].valid == 1 ) {
+       93:  691:                father_dir[i].valid = 0;
+       93:  692:                found = 1;
         -:  693:            }
         -:  694:        }
         -:  695:    }
-       78:  696:    disk->ops->write(disk, father_inode->direct[0], 1, father_dir);
-       78:  697:    if (!found) {
+       93:  696:    disk->ops->write(disk, father_inode->direct[0], 1, father_dir);
+       93:  697:    if (!found) {
     #####:  698:        return -ENOENT;
         -:  699:    }
-       78:  700:    free(father_dir);
-       78:  701:    free(_path);
-       78:  702:    return 0;
+       93:  700:    free(father_dir);
+       93:  701:    free(_path);
+       93:  702:    return 0;
         -:  703:}
         -:  704:
         -:  705:/* rmdir - remove a directory
@@ -910,145 +910,145 @@
         -:  905: *   - on error, return <0
         -:  906: * Errors - path resolution, ENOENT, EISDIR
         -:  907: */
-      270:  908:static int fs_read(const char *path, char *buf, size_t len, off_t offset,
+      302:  908:static int fs_read(const char *path, char *buf, size_t len, off_t offset,
         -:  909:                   struct fuse_file_info *fi)
         -:  910:{
         -:  911:    /*first get the inode
         -:  912:    check it is valid
         -:  913:    check it is file*/
         -:  914:
-      270:  915:    int tmp_offset = offset;
-      270:  916:    int inum = translate(path);
-      270:  917:    if (inum == -ENOENT || inum == -ENOTDIR) {
+      302:  915:    int tmp_offset = offset;
+      302:  916:    int inum = translate(path);
+      302:  917:    if (inum == -ENOENT || inum == -ENOTDIR) {
     #####:  918:        return -ENOENT;
         -:  919:    }
-      270:  920:    const struct fs5600_inode *inode = &inode_region[inum];
-      270:  921:    if(!S_ISREG(inode->mode)) {
-        2:  922:        return -EISDIR;
+      302:  920:    const struct fs5600_inode *inode = &inode_region[inum];
+      302:  921:    if(!S_ISREG(inode->mode)) {
+    #####:  922:        return -EISDIR;
         -:  923:    }
-      268:  924:    int size = inode->size;
-      268:  925:    if (tmp_offset >= size) {
+      302:  924:    int size = inode->size;
+      302:  925:    if (tmp_offset >= size) {
        12:  926:        return 0;
         -:  927:    }
-      256:  928:    if (tmp_offset + len > size) {
-       70:  929:        len = size - tmp_offset;
+      290:  928:    if (tmp_offset + len > size) {
+       82:  929:        len = size - tmp_offset;
         -:  930:    }
-      256:  931:    int tmp_len = len;
-      256:  932:    if (tmp_offset < file_in_inode_sz) {
-       70:  933:        int read_len = fs_read_1st_level(inode, tmp_offset, tmp_len, buf);
-       70:  934:        tmp_offset += read_len;
-       70:  935:        tmp_len -= read_len;
-       70:  936:        buf += read_len;
+      290:  931:    int tmp_len = len;
+      290:  932:    if (tmp_offset < file_in_inode_sz) {
+       82:  933:        int read_len = fs_read_1st_level(inode, tmp_offset, tmp_len, buf);
+       82:  934:        tmp_offset += read_len;
+       82:  935:        tmp_len -= read_len;
+       82:  936:        buf += read_len;
         -:  937:    }
-      500:  938:    if (tmp_offset >= file_in_inode_sz &&
-      244:  939:        tmp_offset < file_in_inode_sz + file_1st_level_sz) {
-      198:  940:        int read_len = fs_read_2nd_level(inode->indir_1, tmp_offset, tmp_len, buf);
-      198:  941:        tmp_offset += read_len;
-      198:  942:        tmp_len -= read_len;
-      198:  943:        buf += read_len;
+      568:  938:    if (tmp_offset >= file_in_inode_sz &&
+      278:  939:        tmp_offset < file_in_inode_sz + file_1st_level_sz) {
+      188:  940:        int read_len = fs_read_2nd_level(inode->indir_1, tmp_offset, tmp_len, buf);
+      188:  941:        tmp_offset += read_len;
+      188:  942:        tmp_len -= read_len;
+      188:  943:        buf += read_len;
         -:  944:    }
-      324:  945:    if (tmp_offset >= file_in_inode_sz + file_1st_level_sz &&
-       68:  946:        tmp_offset <= file_in_inode_sz + file_1st_level_sz + file_2nd_level_sz) {
-       68:  947:        int read_len = fs_read_3rd_level(inode->indir_2, tmp_offset, tmp_len, buf);
-       68:  948:        tmp_offset += read_len;
-       68:  949:        tmp_len -= read_len;
-       68:  950:        buf += read_len;
+      414:  945:    if (tmp_offset >= file_in_inode_sz + file_1st_level_sz &&
+      124:  946:        tmp_offset <= file_in_inode_sz + file_1st_level_sz + file_2nd_level_sz) {
+      124:  947:        int read_len = fs_read_3rd_level(inode->indir_2, tmp_offset, tmp_len, buf);
+      124:  948:        tmp_offset += read_len;
+      124:  949:        tmp_len -= read_len;
+      124:  950:        buf += read_len;
         -:  951:    }
-      256:  952:    return tmp_offset - offset;
+      290:  952:    return tmp_offset - offset;
         -:  953:}
         -:  954:/*
         -:  955:*
         -:  956:*/
-       70:  957:static int fs_read_1st_level(const struct fs5600_inode *inode, off_t offset, size_t len, char *buf) {
-       70:  958:    int read_length = 0;
-       70:  959:    int block_direct = offset / BLOCK_SIZE;
-       70:  960:    int temp_len = len;
+       82:  957:static int fs_read_1st_level(const struct fs5600_inode *inode, off_t offset, size_t len, char *buf) {
+       82:  958:    int read_length = 0;
+       82:  959:    int block_direct = offset / BLOCK_SIZE;
+       82:  960:    int temp_len = len;
         -:  961:    int in_blk_len;
-       70:  962:    int in_blk_offset = offset % BLOCK_SIZE;
-      466:  963:    for (; block_direct < N_DIRECT && temp_len > 0; in_blk_offset = 0, block_direct++) {
-      396:  964:        if (temp_len + in_blk_offset > BLOCK_SIZE) {
-      384:  965:            in_blk_len = BLOCK_SIZE - in_blk_offset;
-      384:  966:            temp_len -= in_blk_len;
+       82:  962:    int in_blk_offset = offset % BLOCK_SIZE;
+      550:  963:    for (; block_direct < N_DIRECT && temp_len > 0; in_blk_offset = 0, block_direct++) {
+      468:  964:        if (temp_len + in_blk_offset > BLOCK_SIZE) {
+      456:  965:            in_blk_len = BLOCK_SIZE - in_blk_offset;
+      456:  966:            temp_len -= in_blk_len;
         -:  967:        } else {
        12:  968:            in_blk_len = temp_len;
        12:  969:            temp_len = 0;
         -:  970:        }
-      396:  971:        if (inode->direct[block_direct] == 0) {
+      468:  971:        if (inode->direct[block_direct] == 0) {
     #####:  972:            break;
         -:  973:        }
-      396:  974:        fs_read_block(inode->direct[block_direct], in_blk_offset, in_blk_len, buf);
-      396:  975:        buf += in_blk_len;
-      396:  976:        read_length += in_blk_len;
+      468:  974:        fs_read_block(inode->direct[block_direct], in_blk_offset, in_blk_len, buf);
+      468:  975:        buf += in_blk_len;
+      468:  976:        read_length += in_blk_len;
         -:  977:    }
-       70:  978:    return read_length;
+       82:  978:    return read_length;
         -:  979:}
         -:  980:
-      280:  981:static int fs_read_2nd_level(size_t root_blk, int offset, int len, char *buf){
-      280:  982:    int read_length = 0;
-      280:  983:    int h1t_offset = offset - file_in_inode_sz; // height 1 tree offset
-      280:  984:    int block_direct = h1t_offset / BLOCK_SIZE;
-      280:  985:    int temp_len = len;
+      338:  981:static int fs_read_2nd_level(size_t root_blk, int offset, int len, char *buf){
+      338:  982:    int read_length = 0;
+      338:  983:    int h1t_offset = offset - file_in_inode_sz; // height 1 tree offset
+      338:  984:    int block_direct = h1t_offset / BLOCK_SIZE;
+      338:  985:    int temp_len = len;
         -:  986:    int in_blk_len;
-      280:  987:    int in_blk_offset = h1t_offset % BLOCK_SIZE;
+      338:  987:    int in_blk_offset = h1t_offset % BLOCK_SIZE;
         -:  988:    int h1t_blk[256];
-      280:  989:    disk->ops->read(disk, root_blk, 1, h1t_blk);
+      338:  989:    disk->ops->read(disk, root_blk, 1, h1t_blk);
         -:  990:
-    16132:  991:    for (; block_direct < 256 && temp_len > 0; in_blk_offset = 0, block_direct++) {
-    15852:  992:        if (temp_len + in_blk_offset > BLOCK_SIZE) {
-    15594:  993:            in_blk_len = BLOCK_SIZE - in_blk_offset;
-    15594:  994:            temp_len -= in_blk_len;
+    25264:  991:    for (; block_direct < 256 && temp_len > 0; in_blk_offset = 0, block_direct++) {
+    24926:  992:        if (temp_len + in_blk_offset > BLOCK_SIZE) {
+    24622:  993:            in_blk_len = BLOCK_SIZE - in_blk_offset;
+    24622:  994:            temp_len -= in_blk_len;
         -:  995:        } else {
-      258:  996:            in_blk_len = temp_len;
-      258:  997:            temp_len = 0;
+      304:  996:            in_blk_len = temp_len;
+      304:  997:            temp_len = 0;
         -:  998:        }
-    15852:  999:        if (h1t_blk[block_direct] == 0) {
+    24926:  999:        if (h1t_blk[block_direct] == 0) {
     #####: 1000:            break;
         -: 1001:        }
-    15852: 1002:        fs_read_block(h1t_blk[block_direct], in_blk_offset, in_blk_len, buf);
-    15851: 1003:        buf += in_blk_len;
-    15851: 1004:        read_length += in_blk_len;
+    24926: 1002:        fs_read_block(h1t_blk[block_direct], in_blk_offset, in_blk_len, buf);
+    24926: 1003:        buf += in_blk_len;
+    24926: 1004:        read_length += in_blk_len;
         -: 1005:    }
-      280: 1006:    return read_length;
+      338: 1006:    return read_length;
         -: 1007:}
         -: 1008:
-       68: 1009:static int fs_read_3rd_level(size_t root_blk, int offset, int len, char *buf){
-       68: 1010:    int read_length = 0;
-       68: 1011:    int h2t_offset = offset - file_1st_level_sz - file_in_inode_sz;// height 2 tree offset
-       68: 1012:    int block_direct = h2t_offset / file_1st_level_sz;
-       68: 1013:    int temp_len = len;
+      124: 1009:static int fs_read_3rd_level(size_t root_blk, int offset, int len, char *buf){
+      124: 1010:    int read_length = 0;
+      124: 1011:    int h2t_offset = offset - file_1st_level_sz - file_in_inode_sz;// height 2 tree offset
+      124: 1012:    int block_direct = h2t_offset / file_1st_level_sz;
+      124: 1013:    int temp_len = len;
         -: 1014:    int in_blk_len;
-       68: 1015:    int in_blk_offset = h2t_offset % file_1st_level_sz;
+      124: 1015:    int in_blk_offset = h2t_offset % file_1st_level_sz;
         -: 1016:
         -: 1017:
         -: 1018:    int h2t_blk[256];
-       68: 1019:    disk->ops->read(disk, root_blk, 1, h2t_blk);
+      124: 1019:    disk->ops->read(disk, root_blk, 1, h2t_blk);
         -: 1020:
-      150: 1021:    for (; block_direct < 256 && temp_len > 0; in_blk_offset = 0, block_direct++) {
-       82: 1022:        if (temp_len + in_blk_offset > file_1st_level_sz) {
-       14: 1023:            in_blk_len = file_1st_level_sz - in_blk_offset;
-       14: 1024:            temp_len -= in_blk_len;
+      274: 1021:    for (; block_direct < 256 && temp_len > 0; in_blk_offset = 0, block_direct++) {
+      150: 1022:        if (temp_len + in_blk_offset > file_1st_level_sz) {
+       26: 1023:            in_blk_len = file_1st_level_sz - in_blk_offset;
+       26: 1024:            temp_len -= in_blk_len;
         -: 1025:        } else {
-       68: 1026:            in_blk_len = temp_len;
-       68: 1027:            temp_len = 0;
+      124: 1026:            in_blk_len = temp_len;
+      124: 1027:            temp_len = 0;
         -: 1028:        }
-       82: 1029:        fs_read_2nd_level(h2t_blk[block_direct], in_blk_offset + file_in_inode_sz, in_blk_len, buf);
-       82: 1030:        buf += in_blk_len;
-       82: 1031:        read_length += in_blk_len;
+      150: 1029:        fs_read_2nd_level(h2t_blk[block_direct], in_blk_offset + file_in_inode_sz, in_blk_len, buf);
+      150: 1030:        buf += in_blk_len;
+      150: 1031:        read_length += in_blk_len;
         -: 1032:    }
-       68: 1033:    return read_length;
+      124: 1033:    return read_length;
         -: 1034:}
         -: 1035:
-    16247: 1036:static int fs_read_block(int blknum, int offset, int len, char *buf) {
-    16247: 1037:    assert(blknum > 0);
-    16247: 1038:    char *blk = (char*) malloc(BLOCK_SIZE);
+    25394: 1036:static int fs_read_block(int blknum, int offset, int len, char *buf) {
+    25394: 1037:    assert(blknum > 0);
+    25394: 1038:    char *blk = (char*) malloc(BLOCK_SIZE);
         -: 1039:
         -: 1040:
-    16247: 1041:    disk->ops->read(disk, blknum, 1, blk);
-    16247: 1042:    char *blk_ptr = blk;
-    16247: 1043:    blk_ptr += offset;
-    16247: 1044:    memcpy(buf, blk_ptr, len);
-    16247: 1045:    free(blk);
-    16247: 1046:    return 0;
+    25394: 1041:    disk->ops->read(disk, blknum, 1, blk);
+    25394: 1042:    char *blk_ptr = blk;
+    25394: 1043:    blk_ptr += offset;
+    25394: 1044:    memcpy(buf, blk_ptr, len);
+    25394: 1045:    free(blk);
+    25394: 1046:    return 0;
         -: 1047:}
         -: 1048:static int fs_write_1st_level(int inode, off_t offset, size_t len, const char *buf);
         -: 1049:static int fs_write_2nd_level(size_t root_blk, int offset, int len, const char *buf);
@@ -1064,228 +1064,228 @@
         -: 1059: *  (POSIX semantics support the creation of files with "holes" in them,
         -: 1060: *   but we don't)
         -: 1061: */
-    17778: 1062:static int fs_write(const char *path, const char *buf, size_t len,
+    13796: 1062:static int fs_write(const char *path, const char *buf, size_t len,
         -: 1063:                    off_t offset, struct fuse_file_info *fi)
         -: 1064:{
         -: 1065:    int inum;
-    17778: 1066:    if (!(inum = translate(path))) { // here checked path resolution
+    13796: 1066:    if (!(inum = translate(path))) { // here checked path resolution
     #####: 1067:        return inum;
         -: 1068:    }
-    17778: 1069:    struct fs5600_inode *inode = &inode_region[inum];
-    17778: 1070:    if (offset > inode->size) {// check tmp_offset is no larger than file size
+    13796: 1069:    struct fs5600_inode *inode = &inode_region[inum];
+    13796: 1070:    if (offset > inode->size) {// check tmp_offset is no larger than file size
     #####: 1071:        return -EINVAL;
         -: 1072:    }
         -: 1073:
-    17778: 1074:    int tmp_offset = offset;
-    17778: 1075:    int tmp_len = len;
+    13796: 1074:    int tmp_offset = offset;
+    13796: 1075:    int tmp_len = len;
         -: 1076:
-    17778: 1077:    if (tmp_offset < file_in_inode_sz) {
-      447: 1078:        int written_len = fs_write_1st_level(inum, tmp_offset, tmp_len, buf);
-      447: 1079:        tmp_offset += written_len;
-      447: 1080:        tmp_len -= written_len;
-      447: 1081:        buf += written_len;
+    13796: 1077:    if (tmp_offset < file_in_inode_sz) {
+      410: 1078:        int written_len = fs_write_1st_level(inum, tmp_offset, tmp_len, buf);
+      410: 1079:        tmp_offset += written_len;
+      410: 1080:        tmp_len -= written_len;
+      410: 1081:        buf += written_len;
         -: 1082:    }
-    35145: 1083:    if (tmp_offset >= file_in_inode_sz &&
-    17367: 1084:            tmp_offset < file_in_inode_sz + file_1st_level_sz) {
+    27232: 1083:    if (tmp_offset >= file_in_inode_sz &&
+    13436: 1084:            tmp_offset < file_in_inode_sz + file_1st_level_sz) {
         -: 1085:
-     9906: 1086:        if (inode->indir_1 == 0) {// if indir_1 not set, set it
+     7993: 1086:        if (inode->indir_1 == 0) {// if indir_1 not set, set it
         -: 1087:            // find a free block
-       36: 1088:            int blk_num = find_free_block_number();
-       36: 1089:            if (blk_num < 0) {
+       50: 1088:            int blk_num = find_free_block_number();
+       50: 1089:            if (blk_num < 0) {
     #####: 1090:                return tmp_offset - offset;
         -: 1091:            }
         -: 1092:            /*change the inode*/
-       36: 1093:            inode->indir_1 = blk_num;
-       36: 1094:            update_inode(inum);
+       50: 1093:            inode->indir_1 = blk_num;
+       50: 1094:            update_inode(inum);
         -: 1095:            /*set the block bitmap*/
-       36: 1096:            FD_SET(blk_num, block_map);
-       36: 1097:            update_bitmap();
+       50: 1096:            FD_SET(blk_num, block_map);
+       50: 1097:            update_bitmap();
         -: 1098:        }
-     9906: 1099:        int written_len = fs_write_2nd_level(inode->indir_1, tmp_offset, tmp_len, buf);
-     9906: 1100:        tmp_offset += written_len;
-     9906: 1101:        tmp_len -= written_len;
-     9906: 1102:        buf += written_len;
+     7993: 1099:        int written_len = fs_write_2nd_level(inode->indir_1, tmp_offset, tmp_len, buf);
+     7993: 1100:        tmp_offset += written_len;
+     7993: 1101:        tmp_len -= written_len;
+     7993: 1102:        buf += written_len;
         -: 1103:    }
-    25254: 1104:    if (tmp_offset >= file_in_inode_sz + file_1st_level_sz &&
-     7476: 1105:            tmp_offset <= file_in_inode_sz + file_1st_level_sz + file_2nd_level_sz) {
-     7476: 1106:        if (inode->indir_2 == 0) { // if indir_2 not set, set it
+    19268: 1104:    if (tmp_offset >= file_in_inode_sz + file_1st_level_sz &&
+     5472: 1105:            tmp_offset <= file_in_inode_sz + file_1st_level_sz + file_2nd_level_sz) {
+     5472: 1106:        if (inode->indir_2 == 0) { // if indir_2 not set, set it
         -: 1107:            // find a free block
-       15: 1108:            int blk_num = find_free_block_number();
-       15: 1109:            if (blk_num < 0) {
+       29: 1108:            int blk_num = find_free_block_number();
+       29: 1109:            if (blk_num < 0) {
     #####: 1110:                return tmp_offset - offset;
         -: 1111:            }
         -: 1112:            /*change the inode*/
-       15: 1113:            inode->indir_2 = blk_num;
-       15: 1114:            update_inode(inum);
+       29: 1113:            inode->indir_2 = blk_num;
+       29: 1114:            update_inode(inum);
         -: 1115:            /*set the block bitmap*/
-       15: 1116:            FD_SET(blk_num, block_map);
-       15: 1117:            update_bitmap();
+       29: 1116:            FD_SET(blk_num, block_map);
+       29: 1117:            update_bitmap();
         -: 1118:        }
-     7476: 1119:        int written_len = fs_write_3rd_level(inode->indir_2, tmp_offset, tmp_len, buf);
-     7476: 1120:        tmp_offset += written_len;
-     7476: 1121:        tmp_len -= written_len;
-     7476: 1122:        buf += written_len;
+     5472: 1119:        int written_len = fs_write_3rd_level(inode->indir_2, tmp_offset, tmp_len, buf);
+     5472: 1120:        tmp_offset += written_len;
+     5472: 1121:        tmp_len -= written_len;
+     5472: 1122:        buf += written_len;
         -: 1123:    }
         -: 1124:    /* update inode size */
-    17778: 1125:    if (tmp_offset > inode->size) {
-    17776: 1126:        inode->size = tmp_offset;
-    17776: 1127:        update_inode(inum);
+    13796: 1125:    if (tmp_offset > inode->size) {
+    13794: 1126:        inode->size = tmp_offset;
+    13794: 1127:        update_inode(inum);
         -: 1128:    }
-    17778: 1129:    printf("written length: %d\n", (int)(tmp_offset - offset));
-    17778: 1130:    return tmp_offset - offset;
+        -: 1129:    // printf("written length: %d\n", (int)(tmp_offset - offset));
+    13796: 1130:    return tmp_offset - offset;
         -: 1131:}
         -: 1132:
-      447: 1133:static int fs_write_1st_level(int inum, off_t offset, size_t len, const char *buf) {
-      447: 1134:    int written_length = 0;
-      447: 1135:    struct fs5600_inode *inode = &inode_region[inum];
-      447: 1136:    int block_direct = offset / BLOCK_SIZE;
-      447: 1137:    int temp_len = len;
+      410: 1133:static int fs_write_1st_level(int inum, off_t offset, size_t len, const char *buf) {
+      410: 1134:    int written_length = 0;
+      410: 1135:    struct fs5600_inode *inode = &inode_region[inum];
+      410: 1136:    int block_direct = offset / BLOCK_SIZE;
+      410: 1137:    int temp_len = len;
         -: 1138:    int in_blk_len;
-      447: 1139:    int in_blk_offset = offset % BLOCK_SIZE;
+      410: 1139:    int in_blk_offset = offset % BLOCK_SIZE;
         -: 1140:
-     1036: 1141:    for (; block_direct < N_DIRECT && temp_len > 0; in_blk_offset = 0, block_direct++) {
-      589: 1142:        if (temp_len + in_blk_offset > BLOCK_SIZE) {
-      173: 1143:            in_blk_len = BLOCK_SIZE - in_blk_offset;
-      173: 1144:            temp_len -= in_blk_len;
+     1022: 1141:    for (; block_direct < N_DIRECT && temp_len > 0; in_blk_offset = 0, block_direct++) {
+      612: 1142:        if (temp_len + in_blk_offset > BLOCK_SIZE) {
+      248: 1143:            in_blk_len = BLOCK_SIZE - in_blk_offset;
+      248: 1144:            temp_len -= in_blk_len;
         -: 1145:        } else {
-      416: 1146:            in_blk_len = temp_len;
-      416: 1147:            temp_len = 0;
+      364: 1146:            in_blk_len = temp_len;
+      364: 1147:            temp_len = 0;
         -: 1148:        }
         -: 1149:        // if there is already allocated
-      589: 1150:        if (inode->direct[block_direct] == 0) {
+      612: 1150:        if (inode->direct[block_direct] == 0) {
         -: 1151:            // find a free block
-      245: 1152:            int blk_num = find_free_block_number();
-      245: 1153:            if (blk_num < 0) {
+      329: 1152:            int blk_num = find_free_block_number();
+      329: 1153:            if (blk_num < 0) {
     #####: 1154:                return written_length;
         -: 1155:            }
         -: 1156:
         -: 1157:            // change the inode
-      245: 1158:            inode->direct[block_direct] = blk_num;
-      245: 1159:            update_inode(inum);
+      329: 1158:            inode->direct[block_direct] = blk_num;
+      329: 1159:            update_inode(inum);
         -: 1160:
         -: 1161:            // set the block bitmap
-      245: 1162:            FD_SET(blk_num, block_map);
-      245: 1163:            update_bitmap();
+      329: 1162:            FD_SET(blk_num, block_map);
+      329: 1163:            update_bitmap();
         -: 1164:        }
         -: 1165:        // write data to the found or given block
-      589: 1166:        char *blk = (char*) malloc(BLOCK_SIZE);
-      589: 1167:        disk->ops->read(disk, inode->direct[block_direct], 1, blk);
-      589: 1168:        memcpy(blk + in_blk_offset, buf, in_blk_len);
-      589: 1169:        disk->ops->write(disk, inode->direct[block_direct], 1, blk);
-      589: 1170:        free(blk);
-      589: 1171:        buf += in_blk_len;
-      589: 1172:        written_length += in_blk_len;
+      612: 1166:        char *blk = (char*) malloc(BLOCK_SIZE);
+      612: 1167:        disk->ops->read(disk, inode->direct[block_direct], 1, blk);
+      612: 1168:        memcpy(blk + in_blk_offset, buf, in_blk_len);
+      612: 1169:        disk->ops->write(disk, inode->direct[block_direct], 1, blk);
+      612: 1170:        free(blk);
+      612: 1171:        buf += in_blk_len;
+      612: 1172:        written_length += in_blk_len;
         -: 1173:    }
         -: 1174:
-      447: 1175:    return written_length;
+      410: 1175:    return written_length;
         -: 1176:}
         -: 1177:
-    17388: 1178:static int fs_write_2nd_level(size_t root_blk, int offset, int len, const char *buf){
-    17388: 1179:    int written_length = 0;
-    17388: 1180:    int h1t_offset = offset - file_in_inode_sz; // height 1 tree offset
-    17388: 1181:    int block_direct = h1t_offset / BLOCK_SIZE;
-    17388: 1182:    int temp_len = len;
+    13487: 1178:static int fs_write_2nd_level(size_t root_blk, int offset, int len, const char *buf){
+    13487: 1179:    int written_length = 0;
+    13487: 1180:    int h1t_offset = offset - file_in_inode_sz; // height 1 tree offset
+    13487: 1181:    int block_direct = h1t_offset / BLOCK_SIZE;
+    13487: 1182:    int temp_len = len;
         -: 1183:    int in_blk_len;
-    17388: 1184:    int in_blk_offset = h1t_offset % BLOCK_SIZE;
+    13487: 1184:    int in_blk_offset = h1t_offset % BLOCK_SIZE;
         -: 1185:
         -: 1186:
         -: 1187:    int h1t_blk[256];
-    17388: 1188:    disk->ops->read(disk, root_blk, 1, h1t_blk);
+    13487: 1188:    disk->ops->read(disk, root_blk, 1, h1t_blk);
         -: 1189:
-    41475: 1190:    for (; block_direct < 256 && temp_len > 0; in_blk_offset = 0, block_direct++) {
-    24091: 1191:        if (temp_len + in_blk_offset > BLOCK_SIZE) {
-     6721: 1192:            in_blk_len = BLOCK_SIZE - in_blk_offset;
-     6721: 1193:            temp_len -= in_blk_len;
+    41758: 1190:    for (; block_direct < 256 && temp_len > 0; in_blk_offset = 0, block_direct++) {
+    28275: 1191:        if (temp_len + in_blk_offset > BLOCK_SIZE) {
+    14820: 1192:            in_blk_len = BLOCK_SIZE - in_blk_offset;
+    14820: 1193:            temp_len -= in_blk_len;
         -: 1194:        } else {
-    17370: 1195:            in_blk_len = temp_len;
-    17370: 1196:            temp_len = 0;
+    13455: 1195:            in_blk_len = temp_len;
+    13455: 1196:            temp_len = 0;
         -: 1197:        }
-    24091: 1198:        if (h1t_blk[block_direct] == 0) { // if h1t_blk block direct is not used, allocate a block
+    28275: 1198:        if (h1t_blk[block_direct] == 0) { // if h1t_blk block direct is not used, allocate a block
         -: 1199:            /*find a free block*/
-    10360: 1200:            int blk_num = find_free_block_number();
-    10360: 1201:            if (blk_num < 0) {
+    20600: 1200:            int blk_num = find_free_block_number();
+    20600: 1201:            if (blk_num < 0) {
         4: 1202:                return written_length;
         -: 1203:            }
         -: 1204:            /*change the h1t block and write back*/
-    10356: 1205:            h1t_blk[block_direct] = blk_num;
-    10356: 1206:            disk->ops->write(disk, root_blk, 1, h1t_blk);
+    20596: 1205:            h1t_blk[block_direct] = blk_num;
+    20596: 1206:            disk->ops->write(disk, root_blk, 1, h1t_blk);
         -: 1207:            /*set the block bitmap*/
-    10356: 1208:            FD_SET(blk_num, block_map);
-    10356: 1209:            update_bitmap();
+    20596: 1208:            FD_SET(blk_num, block_map);
+    20596: 1209:            update_bitmap();
         -: 1210:        }
-    24087: 1211:        char *blk = (char*) malloc(BLOCK_SIZE);
-    24087: 1212:        disk->ops->read(disk, h1t_blk[block_direct], 1, blk);
-    24087: 1213:        memcpy(blk + in_blk_offset, buf, in_blk_len);
+    28271: 1211:        char *blk = (char*) malloc(BLOCK_SIZE);
+    28271: 1212:        disk->ops->read(disk, h1t_blk[block_direct], 1, blk);
+    28271: 1213:        memcpy(blk + in_blk_offset, buf, in_blk_len);
         -: 1214:
-    24087: 1215:        disk->ops->write(disk, h1t_blk[block_direct], 1, blk);
-    24087: 1216:        free(blk);
-    24087: 1217:        buf += in_blk_len;
-    24087: 1218:        written_length += in_blk_len;
+    28271: 1215:        disk->ops->write(disk, h1t_blk[block_direct], 1, blk);
+    28271: 1216:        free(blk);
+    28271: 1217:        buf += in_blk_len;
+    28271: 1218:        written_length += in_blk_len;
         -: 1219:    }
         -: 1220:
-    17384: 1221:    return written_length;
+    13483: 1221:    return written_length;
         -: 1222:}
         -: 1223:
-     7476: 1224:static int fs_write_3rd_level(size_t root_blk, int offset, int len, const char *buf) {
-     7476: 1225:    int written_length = 0;
-     7476: 1226:    int h2t_offset = offset - file_in_inode_sz - file_1st_level_sz;// height 2 tree offset
-     7476: 1227:    int block_direct = h2t_offset / file_1st_level_sz;
-     7476: 1228:    int temp_len = len;
+     5472: 1224:static int fs_write_3rd_level(size_t root_blk, int offset, int len, const char *buf) {
+     5472: 1225:    int written_length = 0;
+     5472: 1226:    int h2t_offset = offset - file_in_inode_sz - file_1st_level_sz;// height 2 tree offset
+     5472: 1227:    int block_direct = h2t_offset / file_1st_level_sz;
+     5472: 1228:    int temp_len = len;
         -: 1229:    int in_blk_len;
-     7476: 1230:    int in_blk_offset = h2t_offset % file_1st_level_sz;
+     5472: 1230:    int in_blk_offset = h2t_offset % file_1st_level_sz;
         -: 1231:
         -: 1232:    int h2t_blk[256];
-     7476: 1233:    disk->ops->read(disk, root_blk, 1, h2t_blk);
+     5472: 1233:    disk->ops->read(disk, root_blk, 1, h2t_blk);
         -: 1234:
-    14956: 1235:    for (; block_direct < 256 && temp_len > 0; in_blk_offset = 0, block_direct++) {
-     7482: 1236:        if (temp_len + in_blk_offset > file_1st_level_sz) {
-        8: 1237:            in_blk_len = file_1st_level_sz - in_blk_offset;
-        8: 1238:            temp_len -= in_blk_len;
+    10964: 1235:    for (; block_direct < 256 && temp_len > 0; in_blk_offset = 0, block_direct++) {
+     5494: 1236:        if (temp_len + in_blk_offset > file_1st_level_sz) {
+       23: 1237:            in_blk_len = file_1st_level_sz - in_blk_offset;
+       23: 1238:            temp_len -= in_blk_len;
         -: 1239:        } else {
-     7474: 1240:            in_blk_len = temp_len;
-     7474: 1241:            temp_len = 0;
+     5471: 1240:            in_blk_len = temp_len;
+     5471: 1241:            temp_len = 0;
         -: 1242:        }
         -: 1243:        // if h2t_blk block direct is not used, allocate a block
-     7482: 1244:        if (h2t_blk[block_direct] == 0) {
+     5494: 1244:        if (h2t_blk[block_direct] == 0) {
         -: 1245:            // find a free block
-       24: 1246:            int blk_num = find_free_block_number();
-       24: 1247:            if (blk_num < 0) {
+       52: 1246:            int blk_num = find_free_block_number();
+       52: 1247:            if (blk_num < 0) {
     #####: 1248:                return written_length;
         -: 1249:            }
         -: 1250:
         -: 1251:            // change the h2t block and write back
-       24: 1252:            h2t_blk[block_direct] = blk_num;
-       24: 1253:            disk->ops->write(disk, root_blk, 1, h2t_blk);
+       52: 1252:            h2t_blk[block_direct] = blk_num;
+       52: 1253:            disk->ops->write(disk, root_blk, 1, h2t_blk);
         -: 1254:
         -: 1255:            // set the block bitmap
-       24: 1256:            FD_SET(blk_num, block_map);
-       24: 1257:            update_bitmap();
+       52: 1256:            FD_SET(blk_num, block_map);
+       52: 1257:            update_bitmap();
         -: 1258:        }
-     7482: 1259:        int written_length_next_level = fs_write_2nd_level(h2t_blk[block_direct], in_blk_offset + N_DIRECT * BLOCK_SIZE, in_blk_len, buf);
-     7482: 1260:        if(written_length_next_level == 0) {
+     5494: 1259:        int written_length_next_level = fs_write_2nd_level(h2t_blk[block_direct], in_blk_offset + N_DIRECT * BLOCK_SIZE, in_blk_len, buf);
+     5494: 1260:        if(written_length_next_level == 0) {
         2: 1261:            break;
         -: 1262:        }
-     7480: 1263:        buf += written_length_next_level;
-     7480: 1264:        written_length += written_length_next_level;
+     5492: 1263:        buf += written_length_next_level;
+     5492: 1264:        written_length += written_length_next_level;
         -: 1265:    }
         -: 1266:
-     7476: 1267:    return written_length;
+     5472: 1267:    return written_length;
         -: 1268:}
         -: 1269:
-    11268: 1270:void update_bitmap() {
-    11268: 1271:    disk->ops->write(disk, 1, inode_map_sz, inode_map);
-    11268: 1272:    disk->ops->write(disk, 1 + inode_map_sz, block_map_sz, block_map);
-    11268: 1273:}
+    21827: 1270:void update_bitmap() {
+    21827: 1271:    disk->ops->write(disk, 1, inode_map_sz, inode_map);
+    21827: 1272:    disk->ops->write(disk, 1 + inode_map_sz, block_map_sz, block_map);
+    21827: 1273:}
         -: 1274:
         -: 1275:
-    10712: 1276:int find_free_block_number() {
+    21092: 1276:int find_free_block_number() {
         -: 1277:    int i;
-  6084942: 1278:    for (i = 0; i < block_map_sz * BLOCK_SIZE * 8 && i < num_of_blocks; i++) {
-  6084938: 1279:        if (!FD_ISSET(i, block_map)) {
-    10708: 1280:            int *clear_blk = calloc(1, BLOCK_SIZE);
-    10708: 1281:            disk->ops->write(disk, i, 1, clear_blk);
-    10708: 1282:            free(clear_blk);
-    10708: 1283:            return i;
+ 13345842: 1278:    for (i = 0; i < block_map_sz * BLOCK_SIZE * 8 && i < num_of_blocks; i++) {
+ 13345838: 1279:        if (!FD_ISSET(i, block_map)) {
+    21088: 1280:            int *clear_blk = calloc(1, BLOCK_SIZE);
+    21088: 1281:            disk->ops->write(disk, i, 1, clear_blk);
+    21088: 1282:            free(clear_blk);
+    21088: 1283:            return i;
         -: 1284:        }
         -: 1285:    }
         -: 1286:
