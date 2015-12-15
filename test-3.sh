@@ -397,7 +397,7 @@ echo "stress test 2 for write passed"
 echo "stress test 3 for write"
 rm testdir/bigfile2
 
-for i in `seq 1 `
+for i in `seq 1 10`
 do
 	cp /tmp/bigfile2 testdir/truncatedfile1 2> /dev/null
 	cp testdir/truncatedfile1 /tmp/truncatedfile1
@@ -411,6 +411,5 @@ done
 echo "stress test 3 for write passed"
 echo "all tests passed"
 rm /tmp/*test*
-fusermount -u testdir
+test `fusermount -u testdir` 0
 rm -r testdir
-
