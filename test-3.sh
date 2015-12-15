@@ -376,7 +376,7 @@ mv ./testdir/file.A ./testdir/file.8
 test ! -f ./testdir/file.A || fail move a file failed source still exists
 test -f ./testdir/file.8 || fail move a file failed no dest file
 echo "rename test passed"
-echo "stress test for write"
+echo "stress test 1 for write"
 makefile 1024000 /tmp/bigfile1
 makefile 2048000 /tmp/bigfile2
 # cp /tmp/bigfile testdir/ 2> /dev/null
@@ -388,19 +388,29 @@ rm testdir/bigfile1
 cp /tmp/bigfile2 testdir/ 2> /dev/null
 slice2=$(stat -c%s testdir/bigfile2)
 test "$slice1" = "$slice2" || fail stress Test For write failed
-# echo "$(wc --bytes testdir/bigfile2)"
-# for i in `seq 1 3`
-# do
-# 	rm testdir/bigfile 
-# 	cp /tmp/bigfile testdir/ 2> /dev/null
-# 	echo "$(wc --bytes testdir/bigfile)"
-# 	test "$(wc --bytes testdir/bigfile)" = "$slice" || fail stress Test 1 For write failed
-# done
+echo "stress test 1 for write passed"
+echo "stress test 2 for write"
 rm /tmp/bigfile2
 cat testdir/bigfile2 > /tmp/bigfile2
 cmp testdir/bigfile2 /tmp/bigfile2 || fail stree Test  2 For write failed
-echo "stress test for write passed"
+echo "stress test 2 for write passed"
+echo "stress test 3 for write"
+rm testdir/bigfile2
+
+for i in `seq 1 `
+do
+	cp /tmp/bigfile2 testdir/truncatedfile1 2> /dev/null
+	cp testdir/truncatedfile1 /tmp/truncatedfile1
+	rm testdir/truncatedfile1
+	cp /tmp/truncatedfile1 testdir/truncatedfile2 
+	cp testdir/truncatedfile2 /tmp/truncatedfile2
+	rm testdir/truncatedfile2
+	cmp /tmp/truncatedfile1 /tmp/truncatedfile2 || fail stress Test 3 For write failed
+	rm /tmp/truncatedfile1 /tmp/truncatedfile2
+done
+echo "stress test 3 for write passed"
 echo "all tests passed"
 rm /tmp/*test*
-
+fusermount -u testdir
+rm -r testdir
 
