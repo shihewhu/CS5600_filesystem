@@ -593,11 +593,11 @@ static int fs_truncate(const char *path, off_t len)
             break;
         }
     }
-    if (inode->size >= (BLOCK_SIZE / 4) * BLOCK_SIZE) {
+    if (inode->size > N_DIRECT * BLOCK_SIZE) {
         truncate_2nd_level(inode->indir_1);
     }
 
-    if (inode->size >= (BLOCK_SIZE / 4) * (BLOCK_SIZE / 4) * BLOCK_SIZE) {
+    if (inode->size > (BLOCK_SIZE / 4) * BLOCK_SIZE + N_DIRECT * BLOCK_SIZE) {
         truncate_3rd_level(inode->indir_2);
     }
 
@@ -627,10 +627,15 @@ void truncate_2nd_level(int h1t_root_blk_num) {
 }
 
 void truncate_3rd_level(int h2t_root_blk_num) {
+    sleep(0.1);
     int h2t_blk[256];
     disk->ops->read(disk, h2t_root_blk_num, 1, h2t_blk);
     int i;
     for (i = 0; i < 256; ++i) {
+        int temp_blk_num = h2t_blk[i];
+        if (temp_blk_num == 0) {
+            break;
+        }
         truncate_2nd_level(h2t_blk[i]);
     }
     FD_CLR(h2t_root_blk_num, block_map);
