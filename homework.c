@@ -69,17 +69,20 @@ void* fs_init(struct fuse_conn_info *conn)
     inode_map = malloc(sb.inode_map_sz * FS_BLOCK_SIZE);
     disk->ops->read(disk, 1, sb.inode_map_sz, inode_map);
     inode_map_sz = sb.inode_map_sz;
+    printf("%d\n", inode_map_sz);
 
     block_map = malloc(sb.block_map_sz * FS_BLOCK_SIZE);
     disk->ops->read(disk, sb.inode_map_sz + 1, sb.block_map_sz, block_map);
     block_map_sz = sb.block_map_sz;
 
+    printf("%d\n", block_map_sz);
     /* read inodes */
     inode_region = malloc(sb.inode_region_sz * FS_BLOCK_SIZE);
     int inode_region_pos = 1 + sb.inode_map_sz + sb.block_map_sz;
     disk->ops->read(disk, inode_region_pos, sb.inode_region_sz, inode_region);
-
+    printf("%d\n", sb.inode_region_sz);
     num_of_blocks = sb.num_blocks;
+    printf("%d\n", num_of_blocks);
 
     return NULL;
 }
@@ -1123,6 +1126,7 @@ static int fs_write(const char *path, const char *buf, size_t len,
         inode->size = tmp_offset;
         update_inode(inum);
     }
+    printf("written length: %d\n", (int)(tmp_offset - offset));
     return tmp_offset - offset;
 }
 
@@ -1252,9 +1256,12 @@ static int fs_write_3rd_level(size_t root_blk, int offset, int len, const char *
             FD_SET(blk_num, block_map);
             update_bitmap();
         }
-        fs_write_2nd_level(h2t_blk[block_direct], in_blk_offset + N_DIRECT * BLOCK_SIZE, in_blk_len, buf);
-        buf += in_blk_len;
-        written_length += in_blk_len;
+        int written_length_next_level = fs_write_2nd_level(h2t_blk[block_direct], in_blk_offset + N_DIRECT * BLOCK_SIZE, in_blk_len, buf);
+        if(written_length_next_level == 0) {
+            break;
+        }
+        buf += written_length_next_level;
+        written_length += written_length_next_level;
     }
 
     return written_length;

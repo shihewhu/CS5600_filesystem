@@ -2,20 +2,15 @@
 make clean
 make
 rm foo.img
-./mkfs-x6 -size 2M foo.img
+./mkfs-x6 -size 1M foo.img
 ./homework -cmdline -image foo.img <<EOF
 put wang.3~ wang.0
-rm wang.0
-put wang.3~ wang.0
 ls-l
-rm wang.0
-put wang.3~ wang.0
-ls-l
-rm wang.0
-put wang.3~ wang.0
-ls-l
+get wang.0 /tmp/wang.3~
 EOF
-./homework -cmdline -image foo.img
+cksum wang.3~ 
+cksum /tmp/wang.3~
+# ./homework -cmdline -image foo.img
 # cp ./foo.img /tmp/foo1.img
 # ./homework -cmdline -image foo.img <<EOF
 # ls
