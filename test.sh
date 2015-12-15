@@ -1,20 +1,16 @@
 #!/bin/bash
-rm foo.img
-./mktest foo.img
-# sleep 0.1
-# make clean
-# make
 make clean
-make COVERAGE=1
+make
+rm foo.img
+./mkfs-x6 -size 2M foo.img
 ./homework -cmdline -image foo.img <<EOF
-rm file.7
-rm file.A
-rm dir1/file.0
-rm dir1/file.2
-rm dir1/file.270
-rmdir dir1
-put wang.3
-ls
+put wang.3~ wang.0
+put wang.3~ wang.1
+put wang.3~ wang.2
+put wang.3~ wang.3
+put wang.3~ wang.4
+ls-l
+show wang.1
 EOF
 # cp ./foo.img /tmp/foo1.img
 # ./homework -cmdline -image foo.img <<EOF

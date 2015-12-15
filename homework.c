@@ -904,6 +904,7 @@ static int fs_read(const char *path, char *buf, size_t len, off_t offset,
     check it is valid
     check it is file*/
 
+    int tmp_offset = offset;
     int inum = translate(path);
     if (inum == -ENOENT || inum == -ENOTDIR) {
         return -ENOENT;
@@ -913,31 +914,34 @@ static int fs_read(const char *path, char *buf, size_t len, off_t offset,
         return -EISDIR;
     }
     int size = inode->size;
-    if (offset >= size) {
+    if (tmp_offset >= size) {
         return 0;
     }
-    if (offset + len > size) {
-        len = size - offset;
+    if (tmp_offset + len > size) {
+        len = size - tmp_offset;
     }
     int tmp_len = len;
-    if (offset < file_in_inode_sz) {
-        int read_len = fs_read_1st_level(inode, offset, tmp_len, buf);
-        offset += read_len;
+    if (tmp_offset < file_in_inode_sz) {
+        int read_len = fs_read_1st_level(inode, tmp_offset, tmp_len, buf);
+        tmp_offset += read_len;
         tmp_len -= read_len;
         buf += read_len;
     }
-    if (offset >= file_in_inode_sz &&
-            offset < file_in_inode_sz + file_1st_level_sz) {
-        int read_len = fs_read_2nd_level(inode->indir_1, offset, tmp_len, buf);
-        offset += read_len;
+    if (tmp_offset >= file_in_inode_sz &&
+        tmp_offset < file_in_inode_sz + file_1st_level_sz) {
+        int read_len = fs_read_2nd_level(inode->indir_1, tmp_offset, tmp_len, buf);
+        tmp_offset += read_len;
         tmp_len -= read_len;
         buf += read_len;
     }
-    if (offset >= file_in_inode_sz + file_1st_level_sz &&
-            offset <= file_in_inode_sz + file_1st_level_sz + file_2nd_level_sz) {
-        fs_read_3rd_level(inode->indir_2, offset, tmp_len, buf);
+    if (tmp_offset >= file_in_inode_sz + file_1st_level_sz &&
+        tmp_offset <= file_in_inode_sz + file_1st_level_sz + file_2nd_level_sz) {
+        int read_len = fs_read_3rd_level(inode->indir_2, tmp_offset, tmp_len, buf);
+        tmp_offset += read_len;
+        tmp_len -= read_len;
+        buf += read_len;
     }
-    return len;
+    return tmp_offset - offset;
 }
 /*
 *
@@ -955,6 +959,9 @@ static int fs_read_1st_level(const struct fs5600_inode *inode, off_t offset, siz
         } else {
             in_blk_len = temp_len;
             temp_len = 0;
+        }
+        if (inode->direct[block_direct] == 0) {
+            break;
         }
         fs_read_block(inode->direct[block_direct], in_blk_offset, in_blk_len, buf);
         buf += in_blk_len;
@@ -980,6 +987,9 @@ static int fs_read_2nd_level(size_t root_blk, int offset, int len, char *buf){
         } else {
             in_blk_len = temp_len;
             temp_len = 0;
+        }
+        if (h1t_blk[block_direct] == 0) {
+            break;
         }
         fs_read_block(h1t_blk[block_direct], in_blk_offset, in_blk_len, buf);
         buf += in_blk_len;
@@ -1052,9 +1062,10 @@ static int fs_write(const char *path, const char *buf, size_t len,
     if (offset > inode->size) {// check tmp_offset is no larger than file size
         return -EINVAL;
     }
-    int tmp_offset = offset;
 
+    int tmp_offset = offset;
     int tmp_len = len;
+
     if (tmp_offset < file_in_inode_sz) {
         int written_len = fs_write_1st_level(inum, tmp_offset, tmp_len, buf);
         tmp_offset += written_len;
@@ -1068,7 +1079,7 @@ static int fs_write(const char *path, const char *buf, size_t len,
             // find a free block
             int blk_num = find_free_block_number();
             if (blk_num < 0) {
-                return -ENOSPC;
+                return tmp_offset - offset;
             }
             /*change the inode*/
             inode->indir_1 = blk_num;
@@ -1088,7 +1099,7 @@ static int fs_write(const char *path, const char *buf, size_t len,
             // find a free block
             int blk_num = find_free_block_number();
             if (blk_num < 0) {
-                return -ENOSPC;
+                return tmp_offset - offset;
             }
             /*change the inode*/
             inode->indir_2 = blk_num;
@@ -1097,14 +1108,17 @@ static int fs_write(const char *path, const char *buf, size_t len,
             FD_SET(blk_num, block_map);
             update_bitmap();
         }
-        fs_write_3rd_level(inode->indir_2, tmp_offset, tmp_len, buf);
+        int written_len = fs_write_3rd_level(inode->indir_2, tmp_offset, tmp_len, buf);
+        tmp_offset += written_len;
+        tmp_len -= written_len;
+        buf += written_len;
     }
     /* update inode size */
-    if (offset + len > inode->size) {
-        inode->size = offset + len;
+    if (tmp_offset > inode->size) {
+        inode->size = tmp_offset;
         update_inode(inum);
     }
-    return len;
+    return tmp_offset - offset;
 }
 
 static int fs_write_1st_level(int inum, off_t offset, size_t len, const char *buf) {
@@ -1128,7 +1142,7 @@ static int fs_write_1st_level(int inum, off_t offset, size_t len, const char *bu
             // find a free block
             int blk_num = find_free_block_number();
             if (blk_num < 0) {
-                return -ENOSPC;
+                return written_length;
             }
 
             // change the inode
@@ -1176,7 +1190,7 @@ static int fs_write_2nd_level(size_t root_blk, int offset, int len, const char *
             /*find a free block*/
             int blk_num = find_free_block_number();
             if (blk_num < 0) {
-                return -ENOSPC;
+                return written_length;
             }
             /*change the h1t block and write back*/
             h1t_blk[block_direct] = blk_num;
@@ -1222,7 +1236,7 @@ static int fs_write_3rd_level(size_t root_blk, int offset, int len, const char *
             // find a free block
             int blk_num = find_free_block_number();
             if (blk_num < 0) {
-                return -ENOSPC;
+                return written_length;
             }
 
             // change the h2t block and write back
