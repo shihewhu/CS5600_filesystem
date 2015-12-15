@@ -371,8 +371,6 @@ static int fs_mknod(const char *path, mode_t mode, dev_t dev)
             .mtime = time_raw_format,
             .size = 0,
     };
-    printf("uid is: %d\n", getuid());
-    printf("gid is: %d\n", getgid());
     int free_inum = find_free_inode_map_bit();
     if (free_inum < 0) {
         return -ENOSPC;
