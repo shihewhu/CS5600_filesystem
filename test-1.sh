@@ -155,7 +155,7 @@ echo "cmd> rename file.8 f" >> $output
 echo "cmd> ls" >> $output
 echo "dir1" >> $output
 echo "f" >> $output
-echo "file.A" >> $outputecho "/file.A -rwxrwxrwx 1000 1" >> $output
+echo "file.A" >> $output 
 echo $quitcmd >> $output
 
 ./homework -cmdline -image test.img << EOF > $output2
