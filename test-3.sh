@@ -38,7 +38,8 @@ fail(){
 ######################prepare and run#############
 echo "preparing for the running environment"
 echo "ckecing mount"
-test `fusermount -u ./testdir` 0
+sleep 1
+test `fusermount -u testdir` 0
 
 echo "compiling"
 
@@ -347,6 +348,9 @@ chmod 754 ./testdir/file.A
 test "$(ls -l ./testdir/file.A)" = \
 	'-rwxr-xr-- 1 student student 1000 Jul 13  2012 ./testdir/file.A' || \
 	fail chmod Test failed
+mkdir testdir/test-dir || fail mkdir failed
+chmod 777 testdir/test-dir || fail chmod failed
+[ -d testdir/test-dir ] || fail testdir/test-dir isn\'t a directory anymore
 echo "chmod test passsed"
 
 echo "utime test"
@@ -411,5 +415,7 @@ done
 echo "stress test 3 for write passed"
 echo "all tests passed"
 rm /tmp/*test*
+echo "finializing"
+sleep 1
 test `fusermount -u testdir` 0
 rm -r testdir

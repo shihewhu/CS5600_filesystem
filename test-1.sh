@@ -109,7 +109,7 @@ initialize $output
 echo "cmd> ls-l /whatever/file" >> $output
 echo $NOFILE >> $output
 echo "cmd> ls-l /file.A/file" >> $output
-echo $NOFILE >> $output
+echo $NOTDIR >> $output
 echo "cmd> ls-l /dir1/file.11" >> $output
 echo $NOFILE >> $output
 echo "cmd> ls-l file.A" >> $output
@@ -235,9 +235,9 @@ echo $FILEEXISTS >> $output
 echo "cmd> mkdir file.7" >> $output # bad path file exits
 echo $FILEEXISTS >> $output
 echo "cmd> mkdir /file.7/test/" >> $output # bath path
-echo $FILEEXISTS >> $output
+echo $NOTDIR >> $output
 echo "cmd> mkdir /whatever/test/" >> $output # bath path
-echo $FILEEXISTS >> $output
+echo $NOFILE >> $output
 echo "cmd> mkdir test" >> $output
 echo "cmd> ls" >> $output
 echo "dir1" >> $output
@@ -275,7 +275,7 @@ initialize $output
 echo "cmd> rmdir /whatever/test/" >> $output
 echo $NOFILE >> $output
 echo "cmd> rmdir /file.7/test/" >> $output
-echo $NOFILE >> $output
+echo $NOTDIR >> $output
 echo "cmd> rmdir /dir1/test/" >> $output
 echo $NOFILE >> $output
 echo "cmd> rmdir /dir1/file.0/" >> $output
@@ -315,7 +315,7 @@ initialize $output
 echo "cmd> rm /whatever/file/" >> $output
 echo $NOFILE >> $output
 echo "cmd> rm /file.7/file/" >> $output
-echo $NOFILE >> $output
+echo $NOTDIR >> $output
 echo "cmd> rm /dir1/file.11" >> $output
 echo $NOFILE >> $output
 echo "cmd> rm /dir1/" >> $output
@@ -323,6 +323,7 @@ echo $ISDIR >> $output
 echo "cmd> rm /dir1/file.0" >> $output
 echo "cmd> ls /dir1/" >> $output
 echo "file.2" >> $output
+
 echo "file.270" >> $output
 echo "cmd> show /dir1/file.0" >> $output
 echo $NOFILE >> $output 
