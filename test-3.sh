@@ -419,3 +419,4 @@ echo "finializing"
 sleep 1
 test `fusermount -u testdir` 0
 rm -r testdir
+rm test.img
