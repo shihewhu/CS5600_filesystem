@@ -115,7 +115,7 @@ echo $NOFILE >> $output
 echo "cmd> ls-l file.A" >> $output
 echo "/file.A -rwxrwxrwx 1000 1" >> $output
 echo "cmd> ls-l /dir1/" >> $output
-echo "file.0 -rwxrwxrwx 0 1" >> $output
+echo "file.0 -rwxrwxrwx 0 0" >> $output
 echo "file.2 -rwxrwxrwx 2012 2" >> $output
 echo "file.270 -rwxrwxrwx 276177 270" >> $output
 echo $quitcmd >> $output
@@ -155,7 +155,7 @@ echo "cmd> rename file.8 f" >> $output
 echo "cmd> ls" >> $output
 echo "dir1" >> $output
 echo "f" >> $output
-echo "file.A" >> $outputecho "/file.A -rwxrwxrwx 1000 1" >> $output
+echo "file.A" >> $output 
 echo $quitcmd >> $output
 
 ./homework -cmdline -image test.img << EOF > $output2
