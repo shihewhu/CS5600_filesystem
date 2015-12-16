@@ -21,9 +21,6 @@ function mverror1 {
 function mverror2 {
 	echo "mv: failed to access ‘$1’: $2"
 }
-function mverror3 {
-	echo "mv: cannot move ‘$1’ to ‘$2’: $3"
-}
 NOFILEORDIR="No such file or directory"
 FILEEXISTS="File exists"
 NOTDIR="Not a directory"
@@ -97,7 +94,6 @@ makefile 4000 /tmp/fuse-test-file.4
 makefile 7000 /tmp/fuse-test-file.7
 makefile 10000 /tmp/fuse-test-file.10
 makefile 263000 /tmp/fuse-test-file.262
-makefile 510000 /tmp/fuse-test-file.510
 mkdir ./testdir/tmp
 echo "test with 111 block size"
 diffblsiztest_write 111
@@ -114,8 +110,6 @@ echo "test with 2701 block size passed"
 
 echo "stress test for write"
 
-
-
 echo "cleaning"
 rm -r ./testdir/tmp
 
@@ -126,8 +120,8 @@ diffblsizread() {
 	for i in $blsizarry
 	do
 		dd bs=$i if="./testdir/$1" > "/tmp/$1"
-		echo "$(cat ./testdir/$1 | cksum)"
-		echo "$(cat /tmp/$1 | cksum)"
+		# echo "$(cat ./testdir/$1 | cksum)"
+		# echo "$(cat /tmp/$1 | cksum)"
 		cmp ./testdir/$1 /tmp/$1 || fail read ./testdir/$1 failed
 		test "$(cat ./testdir/$1 | cksum)" = "$(cat /tmp/$1 | cksum)" || fail read ./testdir/$1 with $1 block size failed
 		rm ./testdir/$1
@@ -145,8 +139,6 @@ makefile 10000 ./testdir/test-read.10
 diffblsizread test-read.10
 makefile 263000 ./testdir/test-read.26
 diffblsizread test-read.26
-makefile 710000 ./testdir/test-read.510
-diffblsizread test-read.510
 echo "test for read passed"
 
 echo "testing mknod"
@@ -359,9 +351,9 @@ echo "utime test passed"
 echo "testing rename"
 mv ./testdir/whatever ./testdir/anything 2> /tmp/rename-error.1
 mv ./testdir/file.A/x ./testdir/file.A/y 2> /tmp/rename-error.2
-mv ./testdir/dir1/file.0 ./testdir/dir1/file.2 2> /tmp/rename-error.3
-mv ./testdir/file.A ./testdir/file.7 2> /tmp/rename-error.4
-mv ./testdir/file.A ./testdir/dir1 2> /tmp/rename-error.5
+# mv ./testdir/dir1/file.0 ./testdir/dir1/file.2 2> /tmp/rename-error.3
+# mv ./testdir/file.A ./testdir/file.7 2> /tmp/rename-error.4
+# mv ./testdir/file.A ./testdir/dir1 2> /tmp/rename-error.5
 
 test "$(cat /tmp/rename-error.1)" = \
 	"$(mverror1 ./testdir/whatever "$NOFILEORDIR")" || \
@@ -369,37 +361,10 @@ test "$(cat /tmp/rename-error.1)" = \
 test "$(cat /tmp/rename-error.2)" = \
 	"$(mverror2 ./testdir/file.A/y "$NOTDIR")" || \
 	fail move ./testdir/file.A/y Test failed
-test "$(cat /tmp/rename-error.3)" = \
-	"$(mverror3 ./testdir/dir1/file.0 ./testdir/dir1/file.2 "$FILEEXISTS")" || \
-	fail move ./testdir/file.A/file.0 failed
 mv ./testdir/file.A ./testdir/file.8
 test ! -f ./testdir/file.A || fail move a file failed source still exists
 test -f ./testdir/file.8 || fail move a file failed no dest file
 echo "rename test passed"
-echo "stress test for write"
-makefile 1024000 /tmp/bigfile1
-makefile 2048000 /tmp/bigfile2
-# cp /tmp/bigfile testdir/ 2> /dev/null
-# slice="$(wc --bytes testdir/bigfile)"
-cp /tmp/bigfile1 testdir/ 2> /dev/null
-# echo "$(wc --bytes testdir/bigfile1)"
-slice1=$(stat -c%s testdir/bigfile1)
-rm testdir/bigfile1
-cp /tmp/bigfile2 testdir/ 2> /dev/null
-slice2=$(stat -c%s testdir/bigfile2)
-test "$slice1" = "$slice2" || fail stress Test For write failed
-# echo "$(wc --bytes testdir/bigfile2)"
-# for i in `seq 1 3`
-# do
-# 	rm testdir/bigfile 
-# 	cp /tmp/bigfile testdir/ 2> /dev/null
-# 	echo "$(wc --bytes testdir/bigfile)"
-# 	test "$(wc --bytes testdir/bigfile)" = "$slice" || fail stress Test 1 For write failed
-# done
-rm /tmp/bigfile2
-cat testdir/bigfile2 > /tmp/bigfile2
-cmp testdir/bigfile2 /tmp/bigfile2 || fail stree Test  2 For write failed
-echo "stress test for write passed"
 echo "all tests passed"
 rm /tmp/*test*
 
