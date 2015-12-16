@@ -223,7 +223,7 @@ static int fs_getattr(const char *path, struct stat *sb)
     fs_init(NULL);
     int inum = translate(path);
     if (inum == -ENOENT || inum == -ENOTDIR) {
-    	return -ENOENT;
+    	return inum;
     }
 
     struct fs5600_inode inode = inode_region[inum];
@@ -349,7 +349,7 @@ static int fs_mknod(const char *path, mode_t mode, dev_t dev)
     }
     int dir_inum = translate(father_path);
     if (dir_inum == -ENOENT || dir_inum == -ENOTDIR) {
-        return -EEXIST;
+        return dir_inum;
     }
     // check if dest file exists
     int inum = translate(path);
@@ -481,7 +481,7 @@ static int fs_mkdir(const char *path, mode_t mode)
     }
     int dir_inum = translate(father_path);
     if (dir_inum == -ENOENT || dir_inum == -ENOTDIR) {
-        return -EEXIST;
+        return dir_inum;
     }
 
 
@@ -498,7 +498,7 @@ static int fs_mkdir(const char *path, mode_t mode)
     }
     //check father is a dir
     if (!S_ISDIR(father_inode->mode)) {
-        return -EEXIST;
+        return -ENOTDIR;
     }
 
     // here allocate inode region, i.e. set inode region bitmap
@@ -554,7 +554,6 @@ static int fs_mkdir(const char *path, mode_t mode)
     free(dir_blk);
     free(_path);
     return 0;
-    // return -EOPNOTSUPP;
 }
 
 void truncate_2nd_level(int h1t_root_blk_num);
@@ -576,7 +575,7 @@ static int fs_truncate(const char *path, off_t len)
 
     int inum = translate(path);
     if (inum == -ENOENT || inum == -ENOTDIR) {
-        return -ENOENT;
+        return inum;
     }
     struct fs5600_inode *inode = &inode_region[inum];
     if  (S_ISDIR(inode->mode)) {
@@ -653,7 +652,7 @@ static int fs_unlink(const char *path)
 {
     int inum = translate(path);
     if (inum == -ENOENT || inum == -ENOTDIR) {
-        return -ENOENT;
+        return inum;
     }
     struct fs5600_inode *inode = &inode_region[inum];
     if  (S_ISDIR(inode->mode)) {
@@ -712,7 +711,7 @@ static int fs_rmdir(const char *path)
     // check dir is dir
     int inum = translate(path);
     if (inum == -ENOENT || inum == -ENOTDIR) {
-        return -ENOENT;
+        return inum;
     }
     struct fs5600_inode *inode = &inode_region[inum];
     if  (S_ISREG(inode->mode)) {
@@ -794,7 +793,7 @@ static int fs_rename(const char *src_path, const char *dst_path)
 	src_inum = translate(src_path);
 	dst_inum = translate(dst_path);
    	if (src_inum < 0)  {
-   		return -ENOENT;
+   		return src_inum;
    	}
    	if (dst_inum > 0) {
    		return -EEXIST;
@@ -915,7 +914,7 @@ static int fs_read(const char *path, char *buf, size_t len, off_t offset,
     int tmp_offset = offset;
     int inum = translate(path);
     if (inum == -ENOENT || inum == -ENOTDIR) {
-        return -ENOENT;
+        return inum;
     }
     const struct fs5600_inode *inode = &inode_region[inum];
     if(!S_ISREG(inode->mode)) {
