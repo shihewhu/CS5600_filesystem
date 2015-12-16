@@ -50,36 +50,34 @@ echo "making image for test"
 echo "making test files"
 #help function
 function create_file {
-	if [[ -f $2 ]]; then
-		#clean file
-		echo "" > $2
-	fi
-	for i in $(seq 1 $1) ; do
-		random_number=$(( ( RAsNDOM % 1000 )  + 1 ))
-		echo $random_number >> $2
-	done
+	# if [[ -f $2 ]]; then
+	# 	#clean file
+	# 	echo "" > $2
+	# fi
+	# for i in $(seq 1 $1) ; do
+	# 	random_number=$(( ( RAsNDOM % 1000 )  + 1 ))
+	# 	echo $random_number >> $2
+	# done
+	yes '$random_number' | fmt | head -c $1 > "$2"
 }
 
-len=2000
-count=1
-while [ $len -le 140000 ]
-do
-	#statements
-	echo "generating random file $count"
-	create_file $len "put-test-file.$count"
-	len=$((len + 5000))
-	count=$((count + 1))
-done
 
-count=$((count - 1))
+create_file 0 put-test-file.1
+create_file 1000 put-test-file.2
+create_file 1024 put-test-file.3
+create_file 1571 put-test-file.4
+create_file 70000 put-test-file.5
+create_file 100000 put-test-file.6
+create_file 262000 put-test-file.7
+create_file 500000 put-test-file.8
 echo "starting test"
 
-for i in $(seq 1 $count); do
+for i in $(seq 1 8); do
 	testing_file="put-test-file.$i"
 	output_file="/tmp/put-test-file.$i"
 	cksum1=$(cksum $testing_file)
 	./mktest test.img
-	./homework -cmdline -image test.img << EOF
+	./homework -cmdline -image test.img << EOF > /dev/null
 	put $testing_file
 	get $testing_file $output_file
 	quit
@@ -87,7 +85,6 @@ EOF
 	cksum2=$(cksum $output_file)
 	IFS=' ' read -r -a cksum1 <<< "$cksum1"
 	IFS=' ' read -r -a cksum2 <<< "$cksum2"
-	ls -l put-test-file.$i
 	if [[ "${cksum1[0]}" == "${cksum2[0]}" ]]; then
 		echo "test case $i passed"
 	else
@@ -99,8 +96,8 @@ EOF
 done;
 
 # cat put-test-file.1
-rm put-test-file.*
-rm /tmp/put-test-file.*
+# rm put-test-file.*
+# rm /tmp/put-test-file.*
 
 
 echo "making a empty img"
